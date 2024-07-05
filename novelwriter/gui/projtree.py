@@ -43,6 +43,7 @@ from novelwriter.common import minmax
 from novelwriter.constants import nwHeaders, nwLabels, nwUnicode, trConst
 from novelwriter.core.coretools import DocDuplicator, DocMerger, DocSplitter
 from novelwriter.core.item import NWItem
+from novelwriter.dialogs.custompdf import GuiCustomPDF
 from novelwriter.dialogs.docmerge import GuiDocMerge
 from novelwriter.dialogs.docsplit import GuiDocSplit
 from novelwriter.dialogs.editlabel import GuiEditLabel
@@ -798,6 +799,15 @@ class GuiProjectTree(QTreeWidget):
                 tItem.setName(newLabel)
                 self.setTreeItemValues(tHandle)
                 self._alertTreeChange(tHandle, flush=False)
+        return
+        
+    def customPrintTreeItem(self, tHandle: str) -> None:
+        """Open a dialog to custom print an item."""
+        if tItem := SHARED.project.tree[tHandle]:
+            document = SHARED.project.storage.getDocument(tHandle)
+            doc = document.readDocument()
+            dialog = GuiCustomPDF(self, doc)
+            dialog.exec()
         return
 
     def saveTreeOrder(self) -> None:
@@ -1761,6 +1771,7 @@ class _TreeContextMenu(QMenu):
 
         # Process Item
         self._itemProcess(isFile, isFolder, isRoot, hasChild)
+        self._itemPrint()
 
         return
 
@@ -1811,6 +1822,13 @@ class _TreeContextMenu(QMenu):
             action.triggered.connect(
                 lambda: self.projTree.renameTreeItem(self._handle, hItem.title)
             )
+        return
+        
+    def _itemPrint(self) -> None:
+        action = self.addAction(self.tr("Print custom"))
+        action.triggered.connect(
+            lambda: self.projTree.customPrintTreeItem(self._handle)
+        )
         return
 
     def _itemActive(self, multi: bool) -> None:
