@@ -1825,7 +1825,7 @@ class _TreeContextMenu(QMenu):
         return
         
     def _itemPrint(self) -> None:
-        action = self.addAction(self.tr("Print custom"))
+        action = self.addAction(self.tr("Custom PDF Print"))
         action.triggered.connect(
             lambda: self.projTree.customPrintTreeItem(self._handle)
         )

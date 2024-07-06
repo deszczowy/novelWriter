@@ -1186,7 +1186,7 @@ def testGuiProjTree_ContextMenu(qtbot, monkeypatch, nwGUI, projPath, mockRnd):
     actions = [x.text() for x in ctxMenu.actions() if x.text()]
     assert actions == [
         "Create New ...", "Rename", "Set Status to ...", "Transform ...", "Expand All",
-        "Collapse All", "Duplicate", "Move to Trash",
+        "Collapse All", "Duplicate", "Move to Trash", "Custom PDF Print"
     ]
 
     def getTransformSubMenu(menu: QMenu) -> list[str]:
