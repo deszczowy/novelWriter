@@ -1771,7 +1771,9 @@ class _TreeContextMenu(QMenu):
 
         # Process Item
         self._itemProcess(isFile, isFolder, isRoot, hasChild)
-        self._itemPrint()
+
+        if isFile:
+            self._itemPrint()
 
         return
 
@@ -1825,6 +1827,7 @@ class _TreeContextMenu(QMenu):
         return
         
     def _itemPrint(self) -> None:
+        # if self._item.itemClass == nwItemClass.TRASH or isRoot or (isFolder and not hasChild):
         action = self.addAction(self.tr("Custom PDF Print"))
         action.triggered.connect(
             lambda: self.projTree.customPrintTreeItem(self._handle)
