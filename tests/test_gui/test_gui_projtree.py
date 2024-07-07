@@ -1186,7 +1186,7 @@ def testGuiProjTree_ContextMenu(qtbot, monkeypatch, nwGUI, projPath, mockRnd):
     actions = [x.text() for x in ctxMenu.actions() if x.text()]
     assert actions == [
         "Create New ...", "Rename", "Set Status to ...", "Transform ...", "Expand All",
-        "Collapse All", "Duplicate", "Move to Trash", "Custom PDF Print"
+        "Collapse All", "Duplicate", "Move to Trash",
     ]
 
     def getTransformSubMenu(menu: QMenu) -> list[str]:
@@ -1204,7 +1204,7 @@ def testGuiProjTree_ContextMenu(qtbot, monkeypatch, nwGUI, projPath, mockRnd):
     assert actions == [
         "Open Document", "View Document", "Create New ...", "Rename", "Rename to Heading",
         "Toggle Active", "Set Status to ...", "Transform ...", "Expand All", "Collapse All",
-        "Duplicate", "Move to Trash",
+        "Duplicate", "Move to Trash", "Custom PDF Print"
     ]
     assert getTransformSubMenu(ctxMenu) == [
         "Convert to Project Note", "Merge Child Items into Self",
@@ -1219,7 +1219,7 @@ def testGuiProjTree_ContextMenu(qtbot, monkeypatch, nwGUI, projPath, mockRnd):
     actions = [x.text() for x in ctxMenu.actions() if x.text()]
     assert actions == [
         "Open Document", "View Document", "Create New ...", "Rename", "Rename to Heading",
-        "Toggle Active", "Set Importance to ...", "Transform ...", "Duplicate", "Move to Trash",
+        "Toggle Active", "Set Importance to ...", "Transform ...", "Duplicate", "Move to Trash", "Custom PDF Print"
     ]
     assert getTransformSubMenu(ctxMenu) == [
         "Split Document by Headings",
@@ -1233,7 +1233,7 @@ def testGuiProjTree_ContextMenu(qtbot, monkeypatch, nwGUI, projPath, mockRnd):
     actions = [x.text() for x in ctxMenu.actions() if x.text()]
     assert actions == [
         "Open Document", "View Document", "Create New ...", "Rename", "Rename to Heading",
-        "Toggle Active", "Set Status to ...", "Transform ...", "Duplicate", "Move to Trash",
+        "Toggle Active", "Set Status to ...", "Transform ...", "Duplicate", "Move to Trash", "Custom PDF Print"
     ]
     assert getTransformSubMenu(ctxMenu) == [
         "Convert to Novel Document", "Split Document by Headings",
