@@ -68,11 +68,16 @@ class Config:
         dataRoot = Path(QStandardPaths.writableLocation(
             QStandardPaths.StandardLocation.AppDataLocation)
         )
+        tempRoot = Path(QStandardPaths.writableLocation(
+            QStandardPaths.StandardLocation.TempLocation)
+        )
+        print(tempRoot)
 
         self._confPath = confRoot.absolute() / self.appHandle  # The user config location
         self._dataPath = dataRoot.absolute() / self.appHandle  # The user data location
         self._homePath = Path.home().absolute()  # The user's home directory
         self._backPath = self._homePath / "Backups"
+        self._tempPath = tempRoot / self.appHandle
 
         self._appPath = Path(__file__).parent.absolute()
         self._appRoot = self._appPath.parent
@@ -452,6 +457,12 @@ class Config:
             return self._backupPath
         return self._backPath
 
+    def tempPath(self, target : str) -> Path:
+        """Return temporary files path."""
+        if isinstance(self._tempPath, Path) and self._tempPath.is_dir():
+            return self._tempPath / target
+        return self._tempPath
+
     def errorText(self) -> str:
         """Compile and return error messages from the initialisation of
         the Config class, and clear the error buffer.
@@ -519,10 +530,11 @@ class Config:
         logger.debug("App Path: %s", self._appPath)
         logger.debug("PDF Manual: %s", self.pdfDocs)
 
-        # If the config and data folders don't exist, create them
+        # If the config, temp and data folders don't exist, create them
         # This assumes that the os config and data folders exist
         self._confPath.mkdir(exist_ok=True)
         self._dataPath.mkdir(exist_ok=True)
+        self._tempPath.mkdir(exist_ok=True)
 
         # Also create the syntax, themes and icons folders if possible
         if self._dataPath.is_dir():

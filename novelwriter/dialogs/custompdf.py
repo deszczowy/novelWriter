@@ -99,7 +99,7 @@ class GuiCustomPDF(NDialog):
         logger.debug("Ready: GuiAbout")
         return
 
-    def _accept(self):
+    def _accept(self) -> None:
         print(self.settings.__dict__)
         print(type(self.content))
         PDFCreator(self.content, self.settings)
@@ -140,6 +140,10 @@ class GuiCustomPDF(NDialog):
         paragraphSpacingCombo.addItem("2")
         paragraphSpacingCombo.activated[str].connect(self._paragraphSpacingChange)
 
+        pdfPath = CONFIG.tempPath("custompdf")
+        pdfPath.mkdir(exist_ok=True)
+        pathLabel = QLabel(f"PDF document path: {pdfPath}")
+
         layout.addWidget(percentLabel)
         layout.addWidget(percentField)
         layout.addWidget(orientationLabel)
@@ -149,6 +153,7 @@ class GuiCustomPDF(NDialog):
         layout.addWidget(lineSpacingCombo)
         layout.addWidget(paragraphSpacingLabel)
         layout.addWidget(paragraphSpacingCombo)
+        layout.addWidget(pathLabel)
         layout.addStretch()
 
         return layout
