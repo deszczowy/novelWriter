@@ -24,6 +24,8 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 from __future__ import annotations
 
 import logging
+import uuid
+import os
 
 from fpdf import FPDF
 
@@ -53,7 +55,10 @@ class CustomPDFOptions:
         self.RatioPercent = 50
         self.LineSpacing = 0.8
         self.ParagraphSpacing = 0.8
+        self.drawFileName()
 
+    def drawFileName(self) -> None:
+        self.FileName = f"{str(uuid.uuid4().hex)}.pdf"
 
 class GuiCustomPDF(NDialog):
 
@@ -142,7 +147,8 @@ class GuiCustomPDF(NDialog):
 
         pdfPath = CONFIG.tempPath("custompdf")
         pdfPath.mkdir(exist_ok=True)
-        pathLabel = QLabel(f"PDF document path: {pdfPath}")
+        documentPath = os.path.join(pdfPath, self.settings.FileName)
+        pathLabel = QLabel(f"PDF document path: {documentPath}")
 
         layout.addWidget(percentLabel)
         layout.addWidget(percentField)
