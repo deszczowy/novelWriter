@@ -59,6 +59,9 @@ class CustomPDFOptions:
 
     def drawFileName(self) -> None:
         self.FileName = f"{str(uuid.uuid4().hex)}.pdf"
+        pdfPath = CONFIG.tempPath("custompdf")
+        pdfPath.mkdir(exist_ok=True)
+        self.FileName = os.path.join(pdfPath, self.FileName)
 
 class GuiCustomPDF(NDialog):
 
@@ -93,6 +96,7 @@ class GuiCustomPDF(NDialog):
         # main view compose
         self.outerBox.addWidget(self.lblDialogTitle)
         self.outerBox.addLayout(self.innerBox)
+        self.outerBox.addLayout(self._buildDocumentPath())
         self.outerBox.addWidget(self.btnBox)
 
         # main view settings
@@ -145,11 +149,6 @@ class GuiCustomPDF(NDialog):
         paragraphSpacingCombo.addItem("2")
         paragraphSpacingCombo.activated[str].connect(self._paragraphSpacingChange)
 
-        pdfPath = CONFIG.tempPath("custompdf")
-        pdfPath.mkdir(exist_ok=True)
-        documentPath = os.path.join(pdfPath, self.settings.FileName)
-        pathLabel = QLabel(f"PDF document path: {documentPath}")
-
         layout.addWidget(percentLabel)
         layout.addWidget(percentField)
         layout.addWidget(orientationLabel)
@@ -159,7 +158,6 @@ class GuiCustomPDF(NDialog):
         layout.addWidget(lineSpacingCombo)
         layout.addWidget(paragraphSpacingLabel)
         layout.addWidget(paragraphSpacingCombo)
-        layout.addWidget(pathLabel)
         layout.addStretch()
 
         return layout
@@ -173,6 +171,13 @@ class GuiCustomPDF(NDialog):
         layout.addWidget(previewLabel)
         layout.addWidget(self.preview)
         layout.addStretch()
+
+        return layout
+
+    def _buildDocumentPath(self) -> QVBoxLayout:
+        layout = QVBoxLayout()
+        pathLabel = QLabel(f"PDF document path: {self.settings.FileName}")
+        layout.addWidget(pathLabel)
 
         return layout
 
@@ -340,7 +345,7 @@ class PDFCreator(FPDF):
         self._processText(text)
         self._startup()
         self._printout()
-        self.output("document.pdf")
+        self.output(settings.FileName)
 
     def _setDefaults(self):
         self.margin = 10  # mm
