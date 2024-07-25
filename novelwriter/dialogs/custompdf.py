@@ -109,9 +109,11 @@ class GuiCustomPDF(NDialog):
         return
 
     def _accept(self) -> None:
-        print(self.settings.__dict__)
-        print(type(self.content))
-        PDFCreator(self.content, self.settings)
+        pdf = PDFCreator(self.content, self.settings)
+        if pdf.completed():
+            self.reject()
+        else:
+            print("PDF Error: something bad happened.")
 
     def _buildOptions(self) -> QVBoxLayout:
         layout = QVBoxLayout()
@@ -340,12 +342,13 @@ class PDFCreator(FPDF):
         self.add_font("notable-font", style="b", fname=nb)
         self.add_font("notable-font", style="i", fname=ni)
 
+        self.done = False
         self._setDefaults()
         self._calculate(settings)
         self._processText(text)
         self._startup()
         self._printout()
-        self.output(settings.FileName)
+        self._save(settings.FileName)
 
     def _setDefaults(self):
         self.margin = 10  # mm
@@ -464,3 +467,10 @@ class PDFCreator(FPDF):
         self.set_font("notable-font", "I", 8)
         self.set_text_color(128)
         self.cell(self.columnWidth, 10, f"Page {self.page_no()}", align="L")
+
+    def _save(self, filePath):
+        self.output(filePath)
+        self.done = os.path.exists(filePath)
+
+    def completed(self):
+        return self.done
