@@ -27,6 +27,7 @@ import logging
 import uuid
 import os
 import subprocess
+import glob
 
 from fpdf import FPDF
 
@@ -110,6 +111,7 @@ class GuiCustomPDF(NDialog):
         return
 
     def _accept(self) -> None:
+        self._clearTemp()
         pdf = PDFCreator(self.content, self.settings)
         close = False
         if pdf.completed():
@@ -205,6 +207,17 @@ class GuiCustomPDF(NDialog):
 
     def _getRatio(self, value):
         return value / 100
+
+    def _clearTemp(self):
+        param = CONFIG.tempPath("custompdf")
+        param = os.path.join(param, '*.pdf')
+        try:
+            files = glob.glob(param)
+            for f in files:
+                os.remove(f)
+        except Exception as e:
+            print("TEMP Clean: failed")
+            print(e)
 
 
 class CustomPDFCLientPreview(QWidget):
