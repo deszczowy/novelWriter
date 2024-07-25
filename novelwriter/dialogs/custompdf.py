@@ -26,6 +26,7 @@ from __future__ import annotations
 import logging
 import uuid
 import os
+import subprocess
 
 from fpdf import FPDF
 
@@ -110,7 +111,12 @@ class GuiCustomPDF(NDialog):
 
     def _accept(self) -> None:
         pdf = PDFCreator(self.content, self.settings)
+        close = False
         if pdf.completed():
+            # sp = subprocess.Popen([self.settings.FileName],shell=True)
+            close = subprocess.call(["xdg-open", self.settings.FileName]) == 0
+
+        if close:
             self.reject()
         else:
             print("PDF Error: something bad happened.")
