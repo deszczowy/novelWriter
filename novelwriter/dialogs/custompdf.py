@@ -32,10 +32,12 @@ import glob
 from fpdf import FPDF
 
 from PyQt5.QtCore import Qt, QPoint
-from PyQt5.QtGui import QPainter, QPixmap, QPen, QPaintEvent, QBrush, QPolygon
+from PyQt5.QtGui import (
+    QPainter, QPixmap, QPen, QPaintEvent, QResizeEvent, QColor, QBrush, QPolygon
+)
 from PyQt5.QtWidgets import (
-    QDialogButtonBox, QHBoxLayout, QLabel, QVBoxLayout, QWidget, QSpinBox, QButtonGroup,
-    QRadioButton, QComboBox
+    QDialogButtonBox, QHBoxLayout, QLabel, QVBoxLayout, QWidget, QSpinBox,
+    QButtonGroup, QRadioButton, QComboBox
 )
 
 from novelwriter import CONFIG
@@ -52,7 +54,7 @@ logger = logging.getLogger(__name__)
 
 class CustomPDFOptions:
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.IsPortrait = False
         self.RatioPercent = 50
         self.LineSpacing = 0.8
@@ -64,6 +66,7 @@ class CustomPDFOptions:
         pdfPath = CONFIG.tempPath("custompdf")
         pdfPath.mkdir(exist_ok=True)
         self.FileName = os.path.join(pdfPath, self.FileName)
+
 
 class GuiCustomPDF(NDialog):
 
@@ -80,7 +83,10 @@ class GuiCustomPDF(NDialog):
         self.resize(CONFIG.pxInt(700), CONFIG.pxInt(300))
 
         self.lblDialogTitle = NColourLabel(
-            self.tr("Export document to PDF"), scale=1.6, bold=True, parent=parent
+            self.tr("Export document to PDF"),
+            scale=1.6,
+            bold=True,
+            parent=parent
         )
 
         self.outerBox = QVBoxLayout()
@@ -149,7 +155,9 @@ class GuiCustomPDF(NDialog):
         lineSpacingCombo.addItem("1")
         lineSpacingCombo.addItem("1.5")
         lineSpacingCombo.addItem("2")
-        lineSpacingCombo.activated[str].connect(self._lineSpacingChange)
+        lineSpacingCombo.activated[str].connect(
+            self._lineSpacingChange
+        )
 
         paragraphSpacingLabel = QLabel("Paragraph spacing")
         paragraphSpacingCombo = QComboBox(self)
@@ -157,7 +165,9 @@ class GuiCustomPDF(NDialog):
         paragraphSpacingCombo.addItem("1")
         paragraphSpacingCombo.addItem("1.5")
         paragraphSpacingCombo.addItem("2")
-        paragraphSpacingCombo.activated[str].connect(self._paragraphSpacingChange)
+        paragraphSpacingCombo.activated[str].connect(
+            self._paragraphSpacingChange
+        )
 
         layout.addWidget(percentLabel)
         layout.addWidget(percentField)
@@ -175,7 +185,10 @@ class GuiCustomPDF(NDialog):
     def _buildPreview(self) -> QVBoxLayout:
         layout = QVBoxLayout()
         previewLabel = QLabel("Preview")
-        self.preview = CustomPDFCLientPreview(self._getRatio(self.settings.RatioPercent), self.settings.IsPortrait)
+        self.preview = CustomPDFCLientPreview(
+            self._getRatio(self.settings.RatioPercent),
+            self.settings.IsPortrait
+        )
         self.preview.setMinimumHeight(350)
 
         layout.addWidget(previewLabel)
@@ -191,21 +204,21 @@ class GuiCustomPDF(NDialog):
 
         return layout
 
-    def _percentFieldChange(self, newValue):
+    def _percentFieldChange(self, newValue: int) -> None:
         self.settings.RatioPercent = newValue
         self.preview.updateRatio(self._getRatio(newValue))
 
-    def _orientationChanged(self, id):
+    def _orientationChanged(self, id: int) -> None:
         self.settings.IsPortrait = id == 1
         self.preview.updateOrientation(self.settings.IsPortrait)
 
-    def _lineSpacingChange(self, value):
+    def _lineSpacingChange(self, value: str):
         self.settings.LineSpacing = float(value)
 
-    def _paragraphSpacingChange(self, value):
+    def _paragraphSpacingChange(self, value: str):
         self.settings.ParagraphSpacing = float(value)
 
-    def _getRatio(self, value):
+    def _getRatio(self, value: float):
         return value / 100
 
     def _clearTemp(self):
@@ -226,7 +239,7 @@ class CustomPDFCLientPreview(QWidget):
     fold = []
     cut = []
 
-    def __init__(self, startingRatio, isPortrait):
+    def __init__(self, startingRatio: float, isPortrait: bool) -> None:
         super().__init__()
         self.ratio = startingRatio
         # A4 measures
@@ -235,13 +248,13 @@ class CustomPDFCLientPreview(QWidget):
         self._calculateSize(isPortrait)
         self.painter = QPainter()
 
-    def _setPixmap(self):
+    def _setPixmap(self) -> None:
         self.pixmap = QPixmap(self.size())
         self.pixmap.fill(Qt.white)
         self.calculate()
         self.repaint()
 
-    def calculate(self):
+    def calculate(self) -> None:
         folding = int(0.20 * self.currentWidth)
         pad = 5
         clientWidth = int(self.currentWidth * self.ratio) - pad
@@ -289,7 +302,7 @@ class CustomPDFCLientPreview(QWidget):
             P1, P2, P4
         ])
 
-    def repaint(self):
+    def repaint(self) -> None:
 
         brush = QBrush()
         brush.setColor(Qt.white)
@@ -313,25 +326,25 @@ class CustomPDFCLientPreview(QWidget):
         self.painter.end()
         self.update()
 
-    def getPen(self, color):
+    def getPen(self, color: QColor) -> None:
         pen = QPen()
         pen.setWidth(2)
         pen.setColor(color)
         return pen
 
-    def paintEvent(self, event: QPaintEvent):
+    def paintEvent(self, event: QPaintEvent) -> None:
         with QPainter(self) as painter:
             painter.drawPixmap(0, 0, self.pixmap)
 
-    def resizeEvent(self, event):
+    def resizeEvent(self, event: QResizeEvent) -> None:
         self._setPixmap()
         event.accept()
 
-    def updateRatio(self, newRatio):
+    def updateRatio(self, newRatio: float) -> None:
         self.ratio = newRatio
         self._setPixmap()
 
-    def _calculateSize(self, isPortrait):
+    def _calculateSize(self, isPortrait: bool) -> None:
         if isPortrait is True:
             self.currentWidth = self.defaultWidth
             self.currentHeight = self.defaultHeight
@@ -339,7 +352,7 @@ class CustomPDFCLientPreview(QWidget):
             self.currentWidth = self.defaultHeight
             self.currentHeight = self.defaultWidth
 
-    def updateOrientation(self, isPortrait):
+    def updateOrientation(self, isPortrait: bool) -> None:
         self._calculateSize(isPortrait)
         self._setPixmap()
 
@@ -350,7 +363,7 @@ class PDFCreator(FPDF):
 
     # sekcje
     # sekcje widoczne i niewidoczne (#!)
-    def __init__(self, text, settings):
+    def __init__(self, text: str, settings: CustomPDFOptions) -> None:
         super().__init__()
 
         nn = CONFIG.assetPath("fonts") / "NotoNormal.ttf"
@@ -369,14 +382,14 @@ class PDFCreator(FPDF):
         self._printout()
         self._save(settings.FileName)
 
-    def _setDefaults(self):
+    def _setDefaults(self) -> None:
         self.margin = 10  # mm
         self.orientation = "P"
         self.columnWidth = 210  # a4
         self.chapterCounter = 0
         self.contents = []
 
-    def _calculate(self, settings):
+    def _calculate(self, settings: CustomPDFOptions) -> None:
         if settings.IsPortrait is False:
             self.columnWidth = 297
             self.orientation = "L"
@@ -384,7 +397,7 @@ class PDFCreator(FPDF):
         self.columnWidth -= self.margin * 2
         self.columnWidth = (self.columnWidth * settings.RatioPercent) / 100
 
-    def _startup(self):
+    def _startup(self) -> None:
         self.set_title("")
         if len(self.contents) > 0:
             self.set_title(self.contents[0][0])
@@ -397,7 +410,7 @@ class PDFCreator(FPDF):
             same=False
         )
 
-    def _processText(self, text):
+    def _processText(self, text: str) -> None:
         currentName = ""
         currentContent = ""
 
@@ -414,7 +427,7 @@ class PDFCreator(FPDF):
         if len(currentName) > 0 or len(currentContent) > 0:
             self._addContents(currentName, currentContent)
 
-    def _addContents(self, label, content):
+    def _addContents(self, label: str, content: str) -> None:
         entryLabel = label.strip()
         entryContent = content.strip()
 
@@ -424,11 +437,11 @@ class PDFCreator(FPDF):
         entry = [entryLabel, entryContent]
         self.contents.append(entry)
 
-    def _printout(self):
+    def _printout(self) -> None:
         for entry in self.contents:
             self._printChapter(entry[0], entry[1])
 
-    def _printChapterTitle(self, label):
+    def _printChapterTitle(self, label: str) -> None:
         print(self.columnWidth)
         caption = f"Chapter {self.chapterCounter}"
         if len(label) > 0:
@@ -448,19 +461,19 @@ class PDFCreator(FPDF):
         )
         self.ln(4)
 
-    def _printChapterBody(self, text):
+    def _printChapterBody(self, text: str) -> None:
         self.set_font("notable-font", "", size=10)
         self.multi_cell(self.columnWidth, 6, text)
         self.ln()
 
-    def _printChapter(self, title, text):
+    def _printChapter(self, title: str, text: str) -> None:
         if len(text) > 0:
             self.chapterCounter += 1
             self._printChapterTitle(title)
             self._printChapterBody(text)
 
     # override
-    def header(self):
+    def header(self) -> None:
         self.set_font("notable-font", "B", 9)
         width = self.get_string_width(self.title) + 11
         self.set_line_width(0.1)
@@ -481,15 +494,15 @@ class PDFCreator(FPDF):
         self.ln(10)
 
     # override
-    def footer(self):
+    def footer(self) -> None:
         self.set_y(-15)  # mm
         self.set_font("notable-font", "I", 8)
         self.set_text_color(128)
         self.cell(self.columnWidth, 10, f"Page {self.page_no()}", align="L")
 
-    def _save(self, filePath):
+    def _save(self, filePath: str) -> None:
         self.output(filePath)
         self.done = os.path.exists(filePath)
 
-    def completed(self):
+    def completed(self) -> None:
         return self.done
