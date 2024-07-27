@@ -800,13 +800,13 @@ class GuiProjectTree(QTreeWidget):
                 self.setTreeItemValues(tHandle)
                 self._alertTreeChange(tHandle, flush=False)
         return
-        
+
     def customPrintTreeItem(self, tHandle: str) -> None:
         """Open a dialog to custom print an item."""
         if tItem := SHARED.project.tree[tHandle]:
             document = SHARED.project.storage.getDocument(tHandle)
             doc = document.readDocument()
-            dialog = GuiCustomPDF(self, doc)
+            dialog = GuiCustomPDF(self, doc, tItem.itemName)
             dialog.exec()
         return
 
@@ -1825,7 +1825,7 @@ class _TreeContextMenu(QMenu):
                 lambda: self.projTree.renameTreeItem(self._handle, hItem.title)
             )
         return
-        
+
     def _itemPrint(self) -> None:
         # if self._item.itemClass == nwItemClass.TRASH or isRoot or (isFolder and not hasChild):
         action = self.addAction(self.tr("Custom PDF Print"))

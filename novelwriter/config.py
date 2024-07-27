@@ -457,7 +457,7 @@ class Config:
             return self._backupPath
         return self._backPath
 
-    def tempPath(self, target : str) -> Path:
+    def tempPath(self, target: str) -> Path:
         """Return temporary files path."""
         if isinstance(self._tempPath, Path) and self._tempPath.is_dir():
             return self._tempPath / target

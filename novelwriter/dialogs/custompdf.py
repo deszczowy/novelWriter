@@ -60,6 +60,7 @@ class CustomPDFOptions:
         self.LineSpacing = 0.8
         self.ParagraphSpacing = 0.8
         self.drawFileName()
+        self.DocumentName = ""
 
     def drawFileName(self) -> None:
         self.FileName = f"{str(uuid.uuid4().hex)}.pdf"
@@ -70,13 +71,19 @@ class CustomPDFOptions:
 
 class GuiCustomPDF(NDialog):
 
-    def __init__(self, parent: QWidget, documentContent: str) -> None:
+    def __init__(self,
+            parent: QWidget,
+            documentContent: str,
+            title: str
+        ) -> None:
         super().__init__(parent=parent)
 
         self.settings = CustomPDFOptions()
+        self.settings.DocumentName = title
         self.content = documentContent
 
         logger.debug("Create: GuiCustomPDF")
+        logger.debug(f"Document: {title}")
         self.setObjectName("GuiCustomPDF")
 
         self.setWindowTitle(self.tr("Custom PDF export"))
@@ -212,16 +219,16 @@ class GuiCustomPDF(NDialog):
         self.settings.IsPortrait = id == 1
         self.preview.updateOrientation(self.settings.IsPortrait)
 
-    def _lineSpacingChange(self, value: str):
+    def _lineSpacingChange(self, value: str) -> None:
         self.settings.LineSpacing = float(value)
 
-    def _paragraphSpacingChange(self, value: str):
+    def _paragraphSpacingChange(self, value: str) -> None:
         self.settings.ParagraphSpacing = float(value)
 
-    def _getRatio(self, value: float):
+    def _getRatio(self, value: float) -> float:
         return value / 100
 
-    def _clearTemp(self):
+    def _clearTemp(self) -> None:
         param = CONFIG.tempPath("custompdf")
         param = os.path.join(param, '*.pdf')
         try:
