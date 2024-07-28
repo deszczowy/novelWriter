@@ -33,7 +33,8 @@ from fpdf import FPDF
 
 from PyQt5.QtCore import Qt, QPoint
 from PyQt5.QtGui import (
-    QPainter, QPixmap, QPen, QPaintEvent, QResizeEvent, QColor, QBrush, QPolygon
+    QPainter, QPixmap, QPen, QPaintEvent, QResizeEvent, QColor,
+    QBrush, QPolygon
 )
 from PyQt5.QtWidgets import (
     QDialogButtonBox, QHBoxLayout, QLabel, QVBoxLayout, QWidget, QSpinBox,
@@ -71,11 +72,12 @@ class CustomPDFOptions:
 
 class GuiCustomPDF(NDialog):
 
-    def __init__(self,
-            parent: QWidget,
-            documentContent: str,
-            title: str
-        ) -> None:
+    def __init__(
+                self,
+                parent: QWidget,
+                documentContent: str,
+                title: str
+            ) -> None:
         super().__init__(parent=parent)
 
         self.settings = CustomPDFOptions()
