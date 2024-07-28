@@ -72,17 +72,12 @@ class CustomPDFOptions:
 
 class GuiCustomPDF(NDialog):
 
-    def __init__(
-                self,
-                parent: QWidget,
-                documentContent: str,
-                title: str
-            ) -> None:
+    def __init__(self, parent: QWidget, dc: str, title: str) -> None:
         super().__init__(parent=parent)
 
         self.settings = CustomPDFOptions()
         self.settings.DocumentName = title
-        self.content = documentContent
+        self.content = dc
 
         logger.debug("Create: GuiCustomPDF")
         logger.debug(f"Document: {title}")
