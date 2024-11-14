@@ -33,29 +33,32 @@ from collections.abc import Sequence
 from datetime import datetime
 from hashlib import sha256
 from pathlib import Path
-from zipfile import ZipFile
+from zipfile import ZIP_DEFLATED, ZipFile
 
-from PyQt5.QtGui import QFont
+from PyQt5.QtGui import QColor, QFont
 
 from novelwriter import __version__
-from novelwriter.common import xmlIndent
-from novelwriter.constants import nwHeadFmt, nwKeyWords, nwLabels
+from novelwriter.common import xmlElement, xmlIndent, xmlSubElem
+from novelwriter.constants import nwHeadFmt, nwStyles
 from novelwriter.core.project import NWProject
-from novelwriter.core.tokenizer import T_Formats, Tokenizer, stripEscape
-from novelwriter.types import FONT_STYLE, FONT_WEIGHTS
+from novelwriter.formats.shared import BlockFmt, BlockTyp, TextFmt, stripEscape
+from novelwriter.formats.tokenizer import Tokenizer
+from novelwriter.types import FONT_STYLE, FONT_WEIGHTS, QtHexRgb
 
 logger = logging.getLogger(__name__)
 
 # Main XML NameSpaces
 XML_NS = {
+    "dc":       "http://purl.org/dc/elements/1.1/",
+    "fo":       "urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0",
+    "loext":    "urn:org:documentfoundation:names:experimental:office:xmlns:loext:1.0",
     "manifest": "urn:oasis:names:tc:opendocument:xmlns:manifest:1.0",
+    "meta":     "urn:oasis:names:tc:opendocument:xmlns:meta:1.0",
+    "number":   "urn:oasis:names:tc:opendocument:xmlns:datastyle:1.0",
     "office":   "urn:oasis:names:tc:opendocument:xmlns:office:1.0",
     "style":    "urn:oasis:names:tc:opendocument:xmlns:style:1.0",
-    "loext":    "urn:org:documentfoundation:names:experimental:office:xmlns:loext:1.0",
     "text":     "urn:oasis:names:tc:opendocument:xmlns:text:1.0",
-    "meta":     "urn:oasis:names:tc:opendocument:xmlns:meta:1.0",
-    "fo":       "urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0",
-    "dc":       "http://purl.org/dc/elements/1.1/",
+    "xlink":    "http://www.w3.org/1999/xlink",
 }
 for ns, uri in XML_NS.items():
     ET.register_namespace(ns, uri)
@@ -79,7 +82,6 @@ TAG_SPC  = _mkTag("text", "s")
 TAG_NSPC = _mkTag("text", "c")
 TAG_TAB  = _mkTag("text", "tab")
 TAG_SPAN = _mkTag("text", "span")
-TAG_STNM = _mkTag("text", "style-name")
 
 # Formatting Codes
 X_BLD = 0x001  # Bold format
@@ -89,8 +91,8 @@ X_UND = 0x008  # Underline format
 X_MRK = 0x010  # Marked format
 X_SUP = 0x020  # Superscript
 X_SUB = 0x040  # Subscript
-X_DLG = 0x080  # Dialogue
-X_DLA = 0x100  # Alt. Dialogue
+X_COL = 0x080  # Coloured text
+X_HRF = 0x100  # Link
 
 # Formatting Masks
 M_BLD = ~X_BLD
@@ -100,8 +102,8 @@ M_UND = ~X_UND
 M_MRK = ~X_MRK
 M_SUP = ~X_SUP
 M_SUB = ~X_SUB
-M_DLG = ~X_DLG
-M_DLA = ~X_DLA
+M_COL = ~X_COL
+M_HRF = ~X_HRF
 
 # ODT Styles
 S_TITLE = "Title"
@@ -114,6 +116,7 @@ S_FIND  = "First_20_line_20_indent"
 S_TEXT  = "Text_20_body"
 S_META  = "Text_20_Meta"
 S_HNF   = "Header_20_and_20_Footer"
+S_NUM   = "N0"
 
 # Font Data
 FONT_WEIGHT_NUM = ["100", "200", "300", "400", "500", "600", "700", "800", "900"]
@@ -151,17 +154,15 @@ class ToOdt(Tokenizer):
 
         self._mainPara: dict[str, ODTParagraphStyle] = {}  # User-accessible paragraph styles
         self._autoPara: dict[str, ODTParagraphStyle] = {}  # Auto-generated paragraph styles
-        self._autoText: dict[int, ODTTextStyle] = {}       # Auto-generated text styles
+        self._autoText: dict[str, ODTTextStyle] = {}       # Auto-generated text styles
 
-        # Footnotes
+        # Storage
         self._nNote = 0
-        self._etNotes: dict[str, ET.Element] = {}  # Generated note elements
-
         self._errData = []  # List of errors encountered
 
         # Properties
         self._textFont     = QFont("Liberation Serif", 12)
-        self._colourHead   = False
+        self._headWeight   = "bold"
         self._headerFormat = ""
         self._pageOffset   = 0
 
@@ -172,44 +173,9 @@ class ToOdt(Tokenizer):
         self._fontStyle    = "normal"
         self._fontPitch    = "variable"
         self._fontBold     = "bold"
-        self._fSizeTitle   = "30pt"
-        self._fSizeHead1   = "24pt"
-        self._fSizeHead2   = "20pt"
-        self._fSizeHead3   = "16pt"
-        self._fSizeHead4   = "14pt"
-        self._fSizeHead    = "14pt"
-        self._fSizeText    = "12pt"
-        self._fSizeFoot    = "10pt"
-        self._fLineHeight  = "115%"
         self._fBlockIndent = "1.693cm"
-        self._fTextIndent  = "0.499cm"
-        self._textAlign    = "left"
         self._dLanguage    = "en"
         self._dCountry     = "GB"
-
-        # Text Margins
-        self._mTopTitle = "0.423cm"
-        self._mTopHead1 = "0.423cm"
-        self._mTopHead2 = "0.353cm"
-        self._mTopHead3 = "0.247cm"
-        self._mTopHead4 = "0.247cm"
-        self._mTopHead  = "0.423cm"
-        self._mTopText  = "0.000cm"
-        self._mTopMeta  = "0.000cm"
-        self._mTopSep   = "0.247cm"
-
-        self._mBotTitle = "0.212cm"
-        self._mBotHead1 = "0.212cm"
-        self._mBotHead2 = "0.212cm"
-        self._mBotHead3 = "0.212cm"
-        self._mBotHead4 = "0.212cm"
-        self._mBotHead  = "0.212cm"
-        self._mBotText  = "0.247cm"
-        self._mBotMeta  = "0.106cm"
-        self._mBotSep   = "0.247cm"
-
-        self._mBotFoot  = "0.106cm"
-        self._mLeftFoot = "0.600cm"
 
         # Document Size and Margins
         self._mDocWidth  = "21.0cm"
@@ -219,39 +185,14 @@ class ToOdt(Tokenizer):
         self._mDocLeft   = "2.000cm"
         self._mDocRight  = "2.000cm"
 
-        # Colour
-        self._colHead12  = None
-        self._opaHead12  = None
-        self._colHead34  = None
-        self._opaHead34  = None
-        self._colMetaTx  = None
-        self._opaMetaTx  = None
-        self._colDialogM = None
-        self._colDialogA = None
-        self._markText   = "#ffffa6"
-
         return
 
     ##
     #  Setters
     ##
 
-    def setLanguage(self, language: str | None) -> None:
-        """Set language for the document."""
-        if language:
-            lang, _, country = language.partition("_")
-            self._dLanguage = lang or self._dLanguage
-            self._dCountry = country or self._dCountry
-        return
-
-    def setColourHeaders(self, state: bool) -> None:
-        """Enable/disable coloured headings and comments."""
-        self._colourHead = state
-        return
-
     def setPageLayout(
-        self, width: int | float, height: int | float,
-        top: int | float, bottom: int | float, left: int | float, right: int | float
+        self, width: float, height: float, top: float, bottom: float, left: float, right: float
     ) -> None:
         """Set the document page size and margins in millimetres."""
         self._mDocWidth  = f"{width/10.0:.3f}cm"
@@ -274,6 +215,8 @@ class ToOdt(Tokenizer):
 
     def initDocument(self) -> None:
         """Initialises a new open document XML tree."""
+        super().initDocument()
+
         # Initialise Variables
         # ====================
 
@@ -281,63 +224,18 @@ class ToOdt(Tokenizer):
         fontWeight = str(intWeight)
         fontBold = str(min(intWeight + 300, 900))
 
-        self._fontFamily = self._textFont.family()
-        self._fontSize   = self._textFont.pointSize()
-        self._fontWeight = FONT_WEIGHT_MAP.get(fontWeight, fontWeight)
-        self._fontStyle  = FONT_STYLE.get(self._textFont.style(), "normal")
-        self._fontPitch  = "fixed" if self._textFont.fixedPitch() else "variable"
-        self._fontBold   = FONT_WEIGHT_MAP.get(fontBold, fontBold)
+        lang, _, country = self._dLocale.name().partition("_")
+        self._dLanguage = lang or self._dLanguage
+        self._dCountry = country or self._dCountry
 
-        self._fSizeTitle = f"{round(2.50 * self._fontSize):d}pt"
-        self._fSizeHead1 = f"{round(2.00 * self._fontSize):d}pt"
-        self._fSizeHead2 = f"{round(1.60 * self._fontSize):d}pt"
-        self._fSizeHead3 = f"{round(1.30 * self._fontSize):d}pt"
-        self._fSizeHead4 = f"{round(1.15 * self._fontSize):d}pt"
-        self._fSizeHead  = f"{round(1.15 * self._fontSize):d}pt"
-        self._fSizeText  = f"{self._fontSize:d}pt"
-        self._fSizeFoot  = f"{round(0.8*self._fontSize):d}pt"
-
-        mScale = self._lineHeight/1.15
-
-        self._mTopTitle = self._emToCm(mScale * self._marginTitle[0])
-        self._mTopHead1 = self._emToCm(mScale * self._marginHead1[0])
-        self._mTopHead2 = self._emToCm(mScale * self._marginHead2[0])
-        self._mTopHead3 = self._emToCm(mScale * self._marginHead3[0])
-        self._mTopHead4 = self._emToCm(mScale * self._marginHead4[0])
-        self._mTopHead  = self._emToCm(mScale * self._marginHead4[0])
-        self._mTopText  = self._emToCm(mScale * self._marginText[0])
-        self._mTopMeta  = self._emToCm(mScale * self._marginMeta[0])
-        self._mTopSep   = self._emToCm(mScale * self._marginSep[0])
-
-        self._mBotTitle = self._emToCm(mScale * self._marginTitle[1])
-        self._mBotHead1 = self._emToCm(mScale * self._marginHead1[1])
-        self._mBotHead2 = self._emToCm(mScale * self._marginHead2[1])
-        self._mBotHead3 = self._emToCm(mScale * self._marginHead3[1])
-        self._mBotHead4 = self._emToCm(mScale * self._marginHead4[1])
-        self._mBotHead  = self._emToCm(mScale * self._marginHead4[1])
-        self._mBotText  = self._emToCm(mScale * self._marginText[1])
-        self._mBotMeta  = self._emToCm(mScale * self._marginMeta[1])
-        self._mBotSep   = self._emToCm(mScale * self._marginSep[1])
-
-        self._mLeftFoot = self._emToCm(self._marginFoot[0])
-        self._mBotFoot  = self._emToCm(self._marginFoot[1])
-
-        if self._colourHead:
-            self._colHead12 = "#2a6099"
-            self._opaHead12 = "100%"
-            self._colHead34 = "#444444"
-            self._opaHead34 = "100%"
-            self._colMetaTx = "#813709"
-            self._opaMetaTx = "100%"
-
-        if self._showDialog:
-            self._colDialogM = "#2a6099"
-            self._colDialogA = "#813709"
-
-        self._fLineHeight  = f"{round(100 * self._lineHeight):d}%"
+        self._fontFamily   = self._textFont.family()
+        self._fontSize     = self._textFont.pointSize()
+        self._fontWeight   = FONT_WEIGHT_MAP.get(fontWeight, fontWeight)
+        self._fontStyle    = FONT_STYLE.get(self._textFont.style(), "normal")
+        self._fontPitch    = "fixed" if self._textFont.fixedPitch() else "variable"
+        self._fontBold     = FONT_WEIGHT_MAP.get(fontBold, fontBold)
+        self._headWeight   = self._fontBold if self._boldHeads else None
         self._fBlockIndent = self._emToCm(self._blockIndent)
-        self._fTextIndent  = self._emToCm(self._firstWidth)
-        self._textAlign    = "justify" if self._doJustify else "left"
 
         # Clear Errors
         self._errData = []
@@ -408,33 +306,21 @@ class ToOdt(Tokenizer):
         timeStamp = datetime.now().isoformat(sep="T", timespec="seconds")
 
         # Office Meta Data
-        xMeta = ET.SubElement(self._xMeta, _mkTag("meta", "creation-date"))
-        xMeta.text = timeStamp
-
-        xMeta = ET.SubElement(self._xMeta, _mkTag("meta", "generator"))
-        xMeta.text = f"novelWriter/{__version__}"
-
-        xMeta = ET.SubElement(self._xMeta, _mkTag("meta", "initial-creator"))
-        xMeta.text = self._project.data.author
-
-        xMeta = ET.SubElement(self._xMeta, _mkTag("meta", "editing-cycles"))
-        xMeta.text = str(self._project.data.saveCount)
+        xmlSubElem(self._xMeta, _mkTag("meta", "creation-date"), timeStamp)
+        xmlSubElem(self._xMeta, _mkTag("meta", "generator"), f"novelWriter/{__version__}")
+        xmlSubElem(self._xMeta, _mkTag("meta", "initial-creator"), self._project.data.author)
+        xmlSubElem(self._xMeta, _mkTag("meta", "editing-cycles"), self._project.data.saveCount)
 
         # Format is: PnYnMnDTnHnMnS
         # https://www.w3.org/TR/2004/REC-xmlschema-2-20041028/#duration
         eT = self._project.data.editTime
-        xMeta = ET.SubElement(self._xMeta, _mkTag("meta", "editing-duration"))
-        xMeta.text = f"P{eT//86400:d}DT{eT%86400//3600:d}H{eT%3600//60:d}M{eT%60:d}S"
+        fT = f"P{eT//86400:d}DT{eT%86400//3600:d}H{eT%3600//60:d}M{eT%60:d}S"
+        xmlSubElem(self._xMeta, _mkTag("meta", "editing-duration"), fT)
 
         # Dublin Core Meta Data
-        xMeta = ET.SubElement(self._xMeta, _mkTag("dc", "title"))
-        xMeta.text = self._project.data.name
-
-        xMeta = ET.SubElement(self._xMeta, _mkTag("dc", "date"))
-        xMeta.text = timeStamp
-
-        xMeta = ET.SubElement(self._xMeta, _mkTag("dc", "creator"))
-        xMeta.text = self._project.data.author
+        xmlSubElem(self._xMeta, _mkTag("dc", "title"), self._project.data.name)
+        xmlSubElem(self._xMeta, _mkTag("dc", "date"), timeStamp)
+        xmlSubElem(self._xMeta, _mkTag("dc", "creator"), self._project.data.author)
 
         self._pageStyles()
         self._defaultStyles()
@@ -445,140 +331,130 @@ class ToOdt(Tokenizer):
 
     def doConvert(self) -> None:
         """Convert the list of text tokens into XML elements."""
-        self._result = ""  # Not used, but cleared just in case
-
         xText = self._xText
-        for tType, _, tText, tFormat, tStyle in self._tokens:
+        for tType, _, tText, tFormat, tStyle in self._blocks:
 
             # Styles
             oStyle = ODTParagraphStyle("New")
-            if tStyle is not None:
-                if tStyle & self.A_LEFT:
-                    oStyle.setTextAlign("left")
-                elif tStyle & self.A_RIGHT:
-                    oStyle.setTextAlign("right")
-                elif tStyle & self.A_CENTRE:
-                    oStyle.setTextAlign("center")
-                elif tStyle & self.A_JUSTIFY:
-                    oStyle.setTextAlign("justify")
+            if tStyle & BlockFmt.LEFT:
+                oStyle.setTextAlign("left")
+            elif tStyle & BlockFmt.RIGHT:
+                oStyle.setTextAlign("right")
+            elif tStyle & BlockFmt.CENTRE:
+                oStyle.setTextAlign("center")
+            elif tStyle & BlockFmt.JUSTIFY:
+                oStyle.setTextAlign("justify")
 
-                if tStyle & self.A_PBB:
-                    oStyle.setBreakBefore("page")
-                if tStyle & self.A_PBA:
-                    oStyle.setBreakAfter("page")
+            if tStyle & BlockFmt.PBB:
+                oStyle.setBreakBefore("page")
+            if tStyle & BlockFmt.PBA:
+                oStyle.setBreakAfter("page")
 
-                if tStyle & self.A_Z_BTMMRG:
-                    oStyle.setMarginBottom("0.000cm")
-                if tStyle & self.A_Z_TOPMRG:
-                    oStyle.setMarginTop("0.000cm")
+            if tStyle & BlockFmt.Z_BTM:
+                oStyle.setMarginBottom("0.000cm")
+            if tStyle & BlockFmt.Z_TOP:
+                oStyle.setMarginTop("0.000cm")
 
-                if tStyle & self.A_IND_L:
-                    oStyle.setMarginLeft(self._fBlockIndent)
-                if tStyle & self.A_IND_R:
-                    oStyle.setMarginRight(self._fBlockIndent)
+            if tStyle & BlockFmt.IND_L:
+                oStyle.setMarginLeft(self._fBlockIndent)
+            if tStyle & BlockFmt.IND_R:
+                oStyle.setMarginRight(self._fBlockIndent)
 
             # Process Text Types
-            if tType == self.T_TEXT:
+            if tType == BlockTyp.TEXT:
                 # Text indentation is processed here because there is a
                 # dedicated pre-defined style for it
-                if tStyle & self.A_IND_T:
+                if tStyle & BlockFmt.IND_T:
                     self._addTextPar(xText, S_FIND, oStyle, tText, tFmt=tFormat)
                 else:
                     self._addTextPar(xText, S_TEXT, oStyle, tText, tFmt=tFormat)
 
-            elif tType == self.T_TITLE:
+            elif tType == BlockTyp.TITLE:
                 # Title must be text:p
-                tHead = tText.replace(nwHeadFmt.BR, "\n")
-                self._addTextPar(xText, S_TITLE, oStyle, tHead, isHead=False)
+                self._addTextPar(xText, S_TITLE, oStyle, tText, isHead=False)
 
-            elif tType == self.T_HEAD1:
-                tHead = tText.replace(nwHeadFmt.BR, "\n")
-                self._addTextPar(xText, S_HEAD1, oStyle, tHead, isHead=True, oLevel="1")
+            elif tType == BlockTyp.HEAD1:
+                self._addTextPar(xText, S_HEAD1, oStyle, tText, isHead=True, oLevel="1")
 
-            elif tType == self.T_HEAD2:
-                tHead = tText.replace(nwHeadFmt.BR, "\n")
-                self._addTextPar(xText, S_HEAD2, oStyle, tHead, isHead=True, oLevel="2")
+            elif tType == BlockTyp.HEAD2:
+                self._addTextPar(xText, S_HEAD2, oStyle, tText, isHead=True, oLevel="2")
 
-            elif tType == self.T_HEAD3:
-                tHead = tText.replace(nwHeadFmt.BR, "\n")
-                self._addTextPar(xText, S_HEAD3, oStyle, tHead, isHead=True, oLevel="3")
+            elif tType == BlockTyp.HEAD3:
+                self._addTextPar(xText, S_HEAD3, oStyle, tText, isHead=True, oLevel="3")
 
-            elif tType == self.T_HEAD4:
-                tHead = tText.replace(nwHeadFmt.BR, "\n")
-                self._addTextPar(xText, S_HEAD4, oStyle, tHead, isHead=True, oLevel="4")
+            elif tType == BlockTyp.HEAD4:
+                self._addTextPar(xText, S_HEAD4, oStyle, tText, isHead=True, oLevel="4")
 
-            elif tType == self.T_SEP:
+            elif tType == BlockTyp.SEP:
                 self._addTextPar(xText, S_SEP, oStyle, tText)
 
-            elif tType == self.T_SKIP:
+            elif tType == BlockTyp.SKIP:
                 self._addTextPar(xText, S_TEXT, oStyle, "")
 
-            elif tType == self.T_SYNOPSIS and self._doSynopsis:
-                tTemp, tFmt = self._formatSynopsis(tText, tFormat, True)
-                self._addTextPar(xText, S_META, oStyle, tTemp, tFmt=tFmt)
+            elif tType == BlockTyp.COMMENT:
+                self._addTextPar(xText, S_META, oStyle, tText, tFmt=tFormat)
 
-            elif tType == self.T_SHORT and self._doSynopsis:
-                tTemp, tFmt = self._formatSynopsis(tText, tFormat, False)
-                self._addTextPar(xText, S_META, oStyle, tTemp, tFmt=tFmt)
-
-            elif tType == self.T_COMMENT and self._doComments:
-                tTemp, tFmt = self._formatComments(tText, tFormat)
-                self._addTextPar(xText, S_META, oStyle, tTemp, tFmt=tFmt)
-
-            elif tType == self.T_KEYWORD and self._doKeywords:
-                tTemp, tFmt = self._formatKeywords(tText)
-                self._addTextPar(xText, S_META, oStyle, tTemp, tFmt=tFmt)
+            elif tType == BlockTyp.KEYWORD:
+                self._addTextPar(xText, S_META, oStyle, tText, tFmt=tFormat)
 
         return
 
     def closeDocument(self) -> None:
-        """Pack the automatic styles of the XML document."""
+        """Add additional collected information to the XML."""
         for style in self._autoPara.values():
             style.packXML(self._xAuto)
         for style in self._autoText.values():
             style.packXML(self._xAuto)
+        if self._counts:
+            xFields = ET.Element(_mkTag("text", "user-field-decls"))
+            for key, value in self._counts.items():
+                ET.SubElement(xFields, _mkTag("text", "user-field-decl"), attrib={
+                    _mkTag("office", "value-type"): "float",
+                    _mkTag("office", "value"): str(value),
+                    _mkTag("text", "name"): f"Manuscript{key[:1].upper()}{key[1:]}",
+                })
+            self._xText.insert(0, xFields)
         return
 
-    def saveFlatXML(self, path: str | Path) -> None:
-        """Save the data to an .fodt file."""
-        with open(path, mode="wb") as fObj:
-            xml = ET.ElementTree(self._dFlat)
-            xmlIndent(xml)
-            xml.write(fObj, encoding="utf-8", xml_declaration=True)
-        logger.info("Wrote file: %s", path)
-        return
-
-    def saveOpenDocText(self, path: str | Path) -> None:
-        """Save the data to an .odt file."""
-        mMani = _mkTag("manifest", "manifest")
-        mVers = _mkTag("manifest", "version")
-        mPath = _mkTag("manifest", "full-path")
-        mType = _mkTag("manifest", "media-type")
-        mFile = _mkTag("manifest", "file-entry")
-
-        xMani = ET.Element(mMani, attrib={mVers: X_VERS})
-        ET.SubElement(xMani, mFile, attrib={mPath: "/", mVers: X_VERS, mType: X_MIME})
-        ET.SubElement(xMani, mFile, attrib={mPath: "settings.xml", mType: "text/xml"})
-        ET.SubElement(xMani, mFile, attrib={mPath: "content.xml", mType: "text/xml"})
-        ET.SubElement(xMani, mFile, attrib={mPath: "meta.xml", mType: "text/xml"})
-        ET.SubElement(xMani, mFile, attrib={mPath: "styles.xml", mType: "text/xml"})
-
-        oRoot = _mkTag("office", "document-settings")
-        oVers = _mkTag("office", "version")
-        xSett = ET.Element(oRoot, attrib={oVers: X_VERS})
-
-        def putInZip(name: str, xObj: ET.Element, zipObj: ZipFile) -> None:
-            with zipObj.open(name, mode="w") as fObj:
-                xml = ET.ElementTree(xObj)
+    def saveDocument(self, path: Path) -> None:
+        """Save the data to an .fodt or .odt file."""
+        if self._isFlat:
+            with open(path, mode="wb") as fObj:
+                xml = ET.ElementTree(self._dFlat)
+                xmlIndent(xml)
                 xml.write(fObj, encoding="utf-8", xml_declaration=True)
 
-        with ZipFile(path, mode="w") as outZip:
-            outZip.writestr("mimetype", X_MIME)
-            putInZip("META-INF/manifest.xml", xMani, outZip)
-            putInZip("settings.xml", xSett, outZip)
-            putInZip("content.xml", self._dCont, outZip)
-            putInZip("meta.xml", self._dMeta, outZip)
-            putInZip("styles.xml", self._dStyl, outZip)
+        else:
+            mMani = _mkTag("manifest", "manifest")
+            mVers = _mkTag("manifest", "version")
+            mPath = _mkTag("manifest", "full-path")
+            mType = _mkTag("manifest", "media-type")
+            mFile = _mkTag("manifest", "file-entry")
+
+            xMani = ET.Element(mMani, attrib={mVers: X_VERS})
+            ET.SubElement(xMani, mFile, attrib={mPath: "/", mVers: X_VERS, mType: X_MIME})
+            ET.SubElement(xMani, mFile, attrib={mPath: "settings.xml", mType: "text/xml"})
+            ET.SubElement(xMani, mFile, attrib={mPath: "content.xml", mType: "text/xml"})
+            ET.SubElement(xMani, mFile, attrib={mPath: "meta.xml", mType: "text/xml"})
+            ET.SubElement(xMani, mFile, attrib={mPath: "styles.xml", mType: "text/xml"})
+
+            oRoot = _mkTag("office", "document-settings")
+            oVers = _mkTag("office", "version")
+            xSett = ET.Element(oRoot, attrib={oVers: X_VERS})
+
+            def xmlToZip(name: str, root: ET.Element, zipObj: ZipFile) -> None:
+                zipObj.writestr(
+                    name, ET.tostring(root, encoding="utf-8", xml_declaration=True),
+                    compress_type=ZIP_DEFLATED, compresslevel=3,
+                )
+
+            with ZipFile(path, mode="w") as outZip:
+                outZip.writestr("mimetype", X_MIME, compress_type=None, compresslevel=None)
+                xmlToZip("META-INF/manifest.xml", xMani, outZip)
+                xmlToZip("settings.xml", xSett, outZip)
+                xmlToZip("content.xml", self._dCont, outZip)
+                xmlToZip("meta.xml", self._dMeta, outZip)
+                xmlToZip("styles.xml", self._dStyl, outZip)
 
         logger.info("Wrote file: %s", path)
 
@@ -588,43 +464,14 @@ class ToOdt(Tokenizer):
     #  Internal Functions
     ##
 
-    def _formatSynopsis(self, text: str, fmt: T_Formats, synopsis: bool) -> tuple[str, T_Formats]:
-        """Apply formatting to synopsis lines."""
-        name = self._localLookup("Synopsis" if synopsis else "Short Description")
-        shift = len(name) + 2
-        rTxt = f"{name}: {text}"
-        rFmt: T_Formats = [(0, self.FMT_B_B, ""), (len(name) + 1, self.FMT_B_E, "")]
-        rFmt.extend((p + shift, f, d) for p, f, d in fmt)
-        return rTxt, rFmt
-
-    def _formatComments(self, text: str, fmt: T_Formats) -> tuple[str, T_Formats]:
-        """Apply formatting to comments."""
-        name = self._localLookup("Comment")
-        shift = len(name) + 2
-        rTxt = f"{name}: {text}"
-        rFmt: T_Formats = [(0, self.FMT_B_B, ""), (len(name) + 1, self.FMT_B_E, "")]
-        rFmt.extend((p + shift, f, d) for p, f, d in fmt)
-        return rTxt, rFmt
-
-    def _formatKeywords(self, text: str) -> tuple[str, T_Formats]:
-        """Apply formatting to keywords."""
-        valid, bits, _ = self._project.index.scanThis("@"+text)
-        if not valid or not bits or bits[0] not in nwLabels.KEY_NAME:
-            return "", []
-
-        rTxt = f"{self._localLookup(nwLabels.KEY_NAME[bits[0]])}: "
-        rFmt: T_Formats = [(0, self.FMT_B_B, ""), (len(rTxt) - 1, self.FMT_B_E, "")]
-        if len(bits) > 1:
-            if bits[0] == nwKeyWords.TAG_KEY:
-                rTxt += bits[1]
-            else:
-                rTxt += ", ".join(bits[1:])
-
-        return rTxt, rFmt
-
     def _addTextPar(
-        self, xParent: ET.Element, styleName: str, oStyle: ODTParagraphStyle, tText: str,
-        tFmt: Sequence[tuple[int, int, str]] = [], isHead: bool = False, oLevel: str | None = None
+        self,
+        xParent: ET.Element,
+        styleName: str, oStyle: ODTParagraphStyle,
+        tText: str,
+        tFmt: Sequence[tuple[int, int, str]] | None = None,
+        isHead: bool = False,
+        oLevel: str | None = None,
     ) -> None:
         """Add a text paragraph to the text XML element."""
         tAttr = {_mkTag("text", "style-name"): self._paraStyle(styleName, oStyle)}
@@ -646,12 +493,13 @@ class ToOdt(Tokenizer):
 
         parProc = XMLParagraph(xElem)
 
-        pErr = 0
         xFmt = 0x00
         tFrag = ""
         fLast = 0
         xNode = None
-        for fPos, fFmt, fData in tFmt:
+        fClass = ""
+        fLink = ""
+        for fPos, fFmt, fData in tFmt or []:
 
             # Add any extra nodes
             if xNode is not None:
@@ -663,51 +511,55 @@ class ToOdt(Tokenizer):
                 if xFmt == 0x00:
                     parProc.appendText(tFrag)
                 else:
-                    parProc.appendSpan(tFrag, self._textStyle(xFmt))
+                    parProc.appendSpan(tFrag, self._textStyle(xFmt, fClass), fLink)
 
             # Calculate the change of format
-            if fFmt == self.FMT_B_B:
+            if fFmt == TextFmt.B_B:
                 xFmt |= X_BLD
-            elif fFmt == self.FMT_B_E:
+            elif fFmt == TextFmt.B_E:
                 xFmt &= M_BLD
-            elif fFmt == self.FMT_I_B:
+            elif fFmt == TextFmt.I_B:
                 xFmt |= X_ITA
-            elif fFmt == self.FMT_I_E:
+            elif fFmt == TextFmt.I_E:
                 xFmt &= M_ITA
-            elif fFmt == self.FMT_D_B:
+            elif fFmt == TextFmt.D_B:
                 xFmt |= X_DEL
-            elif fFmt == self.FMT_D_E:
+            elif fFmt == TextFmt.D_E:
                 xFmt &= M_DEL
-            elif fFmt == self.FMT_U_B:
+            elif fFmt == TextFmt.U_B:
                 xFmt |= X_UND
-            elif fFmt == self.FMT_U_E:
+            elif fFmt == TextFmt.U_E:
                 xFmt &= M_UND
-            elif fFmt == self.FMT_M_B:
+            elif fFmt == TextFmt.M_B:
                 xFmt |= X_MRK
-            elif fFmt == self.FMT_M_E:
+            elif fFmt == TextFmt.M_E:
                 xFmt &= M_MRK
-            elif fFmt == self.FMT_SUP_B:
+            elif fFmt == TextFmt.SUP_B:
                 xFmt |= X_SUP
-            elif fFmt == self.FMT_SUP_E:
+            elif fFmt == TextFmt.SUP_E:
                 xFmt &= M_SUP
-            elif fFmt == self.FMT_SUB_B:
+            elif fFmt == TextFmt.SUB_B:
                 xFmt |= X_SUB
-            elif fFmt == self.FMT_SUB_E:
+            elif fFmt == TextFmt.SUB_E:
                 xFmt &= M_SUB
-            elif fFmt == self.FMT_DL_B:
-                xFmt |= X_DLG
-            elif fFmt == self.FMT_DL_E:
-                xFmt &= M_DLG
-            elif fFmt == self.FMT_ADL_B:
-                xFmt |= X_DLA
-            elif fFmt == self.FMT_ADL_E:
-                xFmt &= M_DLA
-            elif fFmt == self.FMT_FNOTE:
+            elif fFmt == TextFmt.COL_B:
+                xFmt |= X_COL
+                fClass = fData
+            elif fFmt == TextFmt.COL_E:
+                xFmt &= M_COL
+                fClass = ""
+            elif fFmt == TextFmt.HRF_B:
+                xFmt |= X_HRF
+                fLink = fData
+            elif fFmt == TextFmt.HRF_E:
+                xFmt &= M_HRF
+                fLink = ""
+            elif fFmt == TextFmt.FNOTE:
                 xNode = self._generateFootnote(fData)
-            elif fFmt == self.FMT_STRIP:
+            elif fFmt == TextFmt.FIELD:
+                xNode = self._generateField(fData, xFmt)
+            elif fFmt == TextFmt.STRIP:
                 pass
-            else:
-                pErr += 1
 
             fLast = fPos
 
@@ -718,10 +570,7 @@ class ToOdt(Tokenizer):
             if xFmt == 0x00:
                 parProc.appendText(tFrag)
             else:
-                parProc.appendSpan(tFrag, self._textStyle(xFmt))
-
-        if pErr > 0:
-            self._errData.append("Unknown format tag encountered")
+                parProc.appendSpan(tFrag, self._textStyle(xFmt, fClass), fLink)
 
         nErr, errMsg = parProc.checkError()
         if nErr > 0:  # pragma: no cover
@@ -752,10 +601,13 @@ class ToOdt(Tokenizer):
 
         return modStyle.name
 
-    def _textStyle(self, hFmt: int) -> str:
+    def _textStyle(self, hFmt: int, fClass: str = "") -> str:
         """Return a text style for a given style code."""
-        if hFmt in self._autoText:
-            return self._autoText[hFmt].name
+        tKey = str(hFmt)
+        if fClass and (color := self._classes.get(fClass)):
+            tKey = f"{tKey}:{fClass}"
+        if tKey in self._autoText:
+            return self._autoText[tKey].name
 
         style = ODTTextStyle(f"T{len(self._autoText)+1:d}")
         if hFmt & X_BLD:
@@ -768,18 +620,21 @@ class ToOdt(Tokenizer):
         if hFmt & X_UND:
             style.setUnderlineStyle("solid")
             style.setUnderlineWidth("auto")
-            style.setUnderlineColour("font-color")
+            style.setUnderlineColor("font-color")
         if hFmt & X_MRK:
-            style.setBackgroundColour(self._markText)
+            style.setBackgroundColor(self._theme.highlight)
         if hFmt & X_SUP:
             style.setTextPosition("super")
         if hFmt & X_SUB:
             style.setTextPosition("sub")
-        if hFmt & X_DLG:
-            style.setColour(self._colDialogM)
-        if hFmt & X_DLA:
-            style.setColour(self._colDialogA)
-        self._autoText[hFmt] = style
+        if hFmt & X_COL and color:
+            style.setColor(color)
+        if hFmt & X_HRF:
+            style.setColor(self._theme.link)
+            style.setUnderlineStyle("solid")
+            style.setUnderlineWidth("auto")
+            style.setUnderlineColor("font-color")
+        self._autoText[tKey] = style
 
         return style.name
 
@@ -788,20 +643,40 @@ class ToOdt(Tokenizer):
         if content := self._footnotes.get(key):
             self._nNote += 1
             nStyle = ODTParagraphStyle("New")
-            xNote = ET.Element(_mkTag("text", "note"), attrib={
+            xNote = xmlElement(_mkTag("text", "note"), attrib={
                 _mkTag("text", "id"): f"ftn{self._nNote}",
                 _mkTag("text", "note-class"): "footnote",
             })
-            xCite = ET.SubElement(xNote, _mkTag("text", "note-citation"))
-            xCite.text = str(self._nNote)
-            xBody = ET.SubElement(xNote, _mkTag("text", "note-body"))
+            xmlSubElem(xNote, _mkTag("text", "note-citation"), self._nNote)
+            xBody = xmlSubElem(xNote, _mkTag("text", "note-body"))
             self._addTextPar(xBody, "Footnote", nStyle, content[0], tFmt=content[1])
             return xNote
+        return None
+
+    def _generateField(self, key: str, fmt: int) -> ET.Element | None:
+        """Generate a data field XML object."""
+        if key and (field := key.partition(":")[2]):
+            xField = xmlElement(_mkTag("text", "user-field-get"), "0", tail="", attrib={
+                _mkTag("style", "data-style-name"): S_NUM,
+                _mkTag("text", "name"): f"Manuscript{field[:1].upper()}{field[1:]}",
+            })
+            if fmt == 0x00:
+                return xField
+            else:
+                xSpan = xmlElement(TAG_SPAN, "", tail="", attrib={
+                    _mkTag("text", "style-name"): self._textStyle(fmt),
+                })
+                xSpan.append(xField)
+                return xSpan
         return None
 
     def _emToCm(self, value: float) -> str:
         """Converts an em value to centimetres."""
         return f"{value*2.54/72*self._fontSize:.3f}cm"
+
+    def _emToPt(self, scale: float) -> str:
+        """Compute relative font size in points."""
+        return f"{round(scale * self._fontSize):d}pt"
 
     ##
     #  Style Elements
@@ -835,6 +710,9 @@ class ToOdt(Tokenizer):
 
     def _defaultStyles(self) -> None:
         """Set the default styles."""
+        hScale = self._scaleHeads
+        textSize = self._emToPt(nwStyles.T_NORMAL)
+
         # Add Paragraph Family Style
         xStyl = ET.SubElement(self._xStyl, _mkTag("style", "default-style"), attrib={
             _mkTag("style", "family"): "paragraph",
@@ -849,7 +727,7 @@ class ToOdt(Tokenizer):
             _mkTag("fo", "font-family"): self._fontFamily,
             _mkTag("fo", "font-weight"): self._fontWeight,
             _mkTag("fo", "font-style"): self._fontStyle,
-            _mkTag("fo", "font-size"): self._fSizeText,
+            _mkTag("fo", "font-size"): textSize,
             _mkTag("fo", "language"): self._dLanguage,
             _mkTag("fo", "country"): self._dCountry,
         })
@@ -865,7 +743,7 @@ class ToOdt(Tokenizer):
             _mkTag("fo", "font-family"): self._fontFamily,
             _mkTag("fo", "font-weight"): self._fontWeight,
             _mkTag("fo", "font-style"): self._fontStyle,
-            _mkTag("fo", "font-size"): self._fSizeText,
+            _mkTag("fo", "font-size"): textSize,
         })
 
         # Add Default Heading Style
@@ -877,8 +755,8 @@ class ToOdt(Tokenizer):
             _mkTag("style", "class"): "text",
         })
         ET.SubElement(xStyl, _mkTag("style", "paragraph-properties"), attrib={
-            _mkTag("fo", "margin-top"): self._mTopHead,
-            _mkTag("fo", "margin-bottom"): self._mBotHead,
+            _mkTag("fo", "margin-top"): self._emToCm(self._marginHead4[0]),
+            _mkTag("fo", "margin-bottom"): self._emToCm(self._marginHead4[1]),
             _mkTag("fo", "keep-with-next"): "always",
         })
         ET.SubElement(xStyl, _mkTag("style", "text-properties"), attrib={
@@ -886,7 +764,7 @@ class ToOdt(Tokenizer):
             _mkTag("fo", "font-family"): self._fontFamily,
             _mkTag("fo", "font-weight"): self._fontWeight,
             _mkTag("fo", "font-style"): self._fontStyle,
-            _mkTag("fo", "font-size"): self._fSizeHead,
+            _mkTag("fo", "font-size"): self._emToPt(nwStyles.H_SIZES[4] if hScale else 1.0),
         })
 
         # Add Header and Footer Styles
@@ -898,22 +776,36 @@ class ToOdt(Tokenizer):
             _mkTag("style", "class"): "extra",
         })
 
+        # Numbers Style
+        xStyl = ET.SubElement(self._xStyl, _mkTag("number", "number-style"), attrib={
+            _mkTag("style", "name"): S_NUM,
+        })
+        ET.SubElement(xStyl, _mkTag("number", "number"), attrib={
+            _mkTag("number", "min-integer-digits"): "1",
+        })
+
         return
 
     def _useableStyles(self) -> None:
         """Set the usable styles."""
+        hScale = self._scaleHeads
+        hColor = self._theme.head if self._colorHeads else None
+
+        textSize = self._emToPt(nwStyles.T_NORMAL)
+        lineHeight = f"{round(100 * self._lineHeight):d}%"
+
         # Add Text Body Style
         style = ODTParagraphStyle(S_TEXT)
         style.setDisplayName("Text body")
         style.setParentStyleName("Standard")
         style.setClass("text")
-        style.setMarginTop(self._mTopText)
-        style.setMarginBottom(self._mBotText)
-        style.setLineHeight(self._fLineHeight)
-        style.setTextAlign(self._textAlign)
+        style.setMarginTop(self._emToCm(self._marginText[0]))
+        style.setMarginBottom(self._emToCm(self._marginText[1]))
+        style.setLineHeight(lineHeight)
+        style.setTextAlign(self._defaultAlign)
         style.setFontName(self._fontFamily)
         style.setFontFamily(self._fontFamily)
-        style.setFontSize(self._fSizeText)
+        style.setFontSize(textSize)
         style.setFontWeight(self._fontWeight)
         style.packXML(self._xStyl)
         self._mainPara[style.name] = style
@@ -923,7 +815,7 @@ class ToOdt(Tokenizer):
         style.setDisplayName("First line indent")
         style.setParentStyleName(S_TEXT)
         style.setClass("text")
-        style.setTextIndent(self._fTextIndent)
+        style.setTextIndent(self._emToCm(self._firstWidth))
         style.packXML(self._xStyl)
         self._mainPara[style.name] = style
 
@@ -932,15 +824,13 @@ class ToOdt(Tokenizer):
         style.setDisplayName("Text Meta")
         style.setParentStyleName("Standard")
         style.setClass("text")
-        style.setMarginTop(self._mTopMeta)
-        style.setMarginBottom(self._mBotMeta)
-        style.setLineHeight(self._fLineHeight)
+        style.setMarginTop(self._emToCm(self._marginMeta[0]))
+        style.setMarginBottom(self._emToCm(self._marginMeta[1]))
+        style.setLineHeight(lineHeight)
         style.setFontName(self._fontFamily)
         style.setFontFamily(self._fontFamily)
-        style.setFontSize(self._fSizeText)
+        style.setFontSize(textSize)
         style.setFontWeight(self._fontWeight)
-        style.setColour(self._colMetaTx)
-        style.setOpacity(self._opaMetaTx)
         style.packXML(self._xStyl)
         self._mainPara[style.name] = style
 
@@ -950,13 +840,13 @@ class ToOdt(Tokenizer):
         style.setParentStyleName("Heading")
         style.setNextStyleName(S_TEXT)
         style.setClass("chapter")
-        style.setMarginTop(self._mTopTitle)
-        style.setMarginBottom(self._mBotTitle)
+        style.setMarginTop(self._emToCm(self._marginTitle[0]))
+        style.setMarginBottom(self._emToCm(self._marginTitle[1]))
         style.setTextAlign("center")
         style.setFontName(self._fontFamily)
         style.setFontFamily(self._fontFamily)
-        style.setFontSize(self._fSizeTitle)
-        style.setFontWeight(self._fontBold)
+        style.setFontSize(self._emToPt(nwStyles.H_SIZES[0] if hScale else 1.0))
+        style.setFontWeight(self._headWeight)
         style.packXML(self._xStyl)
         self._mainPara[style.name] = style
 
@@ -966,13 +856,13 @@ class ToOdt(Tokenizer):
         style.setParentStyleName("Standard")
         style.setNextStyleName(S_TEXT)
         style.setClass("text")
-        style.setMarginTop(self._mTopSep)
-        style.setMarginBottom(self._mBotSep)
-        style.setLineHeight(self._fLineHeight)
+        style.setMarginTop(self._emToCm(self._marginSep[0]))
+        style.setMarginBottom(self._emToCm(self._marginSep[1]))
+        style.setLineHeight(lineHeight)
         style.setTextAlign("center")
         style.setFontName(self._fontFamily)
         style.setFontFamily(self._fontFamily)
-        style.setFontSize(self._fSizeText)
+        style.setFontSize(textSize)
         style.setFontWeight(self._fontWeight)
         style.packXML(self._xStyl)
         self._mainPara[style.name] = style
@@ -984,14 +874,13 @@ class ToOdt(Tokenizer):
         style.setNextStyleName(S_TEXT)
         style.setOutlineLevel("1")
         style.setClass("text")
-        style.setMarginTop(self._mTopHead1)
-        style.setMarginBottom(self._mBotHead1)
+        style.setMarginTop(self._emToCm(self._marginHead1[0]))
+        style.setMarginBottom(self._emToCm(self._marginHead1[1]))
         style.setFontName(self._fontFamily)
         style.setFontFamily(self._fontFamily)
-        style.setFontSize(self._fSizeHead1)
-        style.setFontWeight(self._fontBold)
-        style.setColour(self._colHead12)
-        style.setOpacity(self._opaHead12)
+        style.setFontSize(self._emToPt(nwStyles.H_SIZES[1] if hScale else 1.0))
+        style.setFontWeight(self._headWeight)
+        style.setColor(hColor)
         style.packXML(self._xStyl)
         self._mainPara[style.name] = style
 
@@ -1002,14 +891,13 @@ class ToOdt(Tokenizer):
         style.setNextStyleName(S_TEXT)
         style.setOutlineLevel("2")
         style.setClass("text")
-        style.setMarginTop(self._mTopHead2)
-        style.setMarginBottom(self._mBotHead2)
+        style.setMarginTop(self._emToCm(self._marginHead2[0]))
+        style.setMarginBottom(self._emToCm(self._marginHead2[1]))
         style.setFontName(self._fontFamily)
         style.setFontFamily(self._fontFamily)
-        style.setFontSize(self._fSizeHead2)
-        style.setFontWeight(self._fontBold)
-        style.setColour(self._colHead12)
-        style.setOpacity(self._opaHead12)
+        style.setFontSize(self._emToPt(nwStyles.H_SIZES[2] if hScale else 1.0))
+        style.setFontWeight(self._headWeight)
+        style.setColor(hColor)
         style.packXML(self._xStyl)
         self._mainPara[style.name] = style
 
@@ -1020,14 +908,13 @@ class ToOdt(Tokenizer):
         style.setNextStyleName(S_TEXT)
         style.setOutlineLevel("3")
         style.setClass("text")
-        style.setMarginTop(self._mTopHead3)
-        style.setMarginBottom(self._mBotHead3)
+        style.setMarginTop(self._emToCm(self._marginHead3[0]))
+        style.setMarginBottom(self._emToCm(self._marginHead3[1]))
         style.setFontName(self._fontFamily)
         style.setFontFamily(self._fontFamily)
-        style.setFontSize(self._fSizeHead3)
-        style.setFontWeight(self._fontBold)
-        style.setColour(self._colHead34)
-        style.setOpacity(self._opaHead34)
+        style.setFontSize(self._emToPt(nwStyles.H_SIZES[3] if hScale else 1.0))
+        style.setFontWeight(self._headWeight)
+        style.setColor(hColor)
         style.packXML(self._xStyl)
         self._mainPara[style.name] = style
 
@@ -1038,14 +925,13 @@ class ToOdt(Tokenizer):
         style.setNextStyleName(S_TEXT)
         style.setOutlineLevel("4")
         style.setClass("text")
-        style.setMarginTop(self._mTopHead4)
-        style.setMarginBottom(self._mBotHead4)
+        style.setMarginTop(self._emToCm(self._marginHead4[0]))
+        style.setMarginBottom(self._emToCm(self._marginHead4[1]))
         style.setFontName(self._fontFamily)
         style.setFontFamily(self._fontFamily)
-        style.setFontSize(self._fSizeHead4)
-        style.setFontWeight(self._fontBold)
-        style.setColour(self._colHead34)
-        style.setOpacity(self._opaHead34)
+        style.setFontSize(self._emToPt(nwStyles.H_SIZES[4] if hScale else 1.0))
+        style.setFontWeight(self._headWeight)
+        style.setColor(hColor)
         style.packXML(self._xStyl)
         self._mainPara[style.name] = style
 
@@ -1062,10 +948,10 @@ class ToOdt(Tokenizer):
         style.setDisplayName("Footnote")
         style.setParentStyleName("Standard")
         style.setClass("extra")
-        style.setMarginLeft(self._mLeftFoot)
-        style.setMarginBottom(self._mBotFoot)
-        style.setTextIndent("-"+self._mLeftFoot)
-        style.setFontSize(self._fSizeFoot)
+        style.setMarginLeft(self._emToCm(self._marginFoot[0]))
+        style.setMarginBottom(self._emToCm(self._marginFoot[1]))
+        style.setTextIndent("-"+self._emToCm(self._marginFoot[0]))
+        style.setFontSize(self._emToPt(nwStyles.T_SMALL))
         style.packXML(self._xStyl)
         self._mainPara[style.name] = style
 
@@ -1080,12 +966,12 @@ class ToOdt(Tokenizer):
 
         # Standard Page Header
         if self._headerFormat:
-            pre, page, post = self._headerFormat.partition(nwHeadFmt.ODT_PAGE)
+            pre, page, post = self._headerFormat.partition(nwHeadFmt.DOC_PAGE)
 
-            pre = pre.replace(nwHeadFmt.ODT_PROJECT, self._project.data.name)
-            pre = pre.replace(nwHeadFmt.ODT_AUTHOR, self._project.data.author)
-            post = post.replace(nwHeadFmt.ODT_PROJECT, self._project.data.name)
-            post = post.replace(nwHeadFmt.ODT_AUTHOR, self._project.data.author)
+            pre = pre.replace(nwHeadFmt.DOC_PROJECT, self._project.data.name)
+            pre = pre.replace(nwHeadFmt.DOC_AUTHOR, self._project.data.author)
+            post = post.replace(nwHeadFmt.DOC_PROJECT, self._project.data.name)
+            post = post.replace(nwHeadFmt.DOC_AUTHOR, self._project.data.author)
 
             xHead = ET.SubElement(xPage, _mkTag("style", "header"))
             xPar = ET.SubElement(xHead, _mkTag("text", "p"), attrib={
@@ -1166,16 +1052,6 @@ class ODTParagraphStyle:
     @property
     def name(self) -> str:
         return self._name
-
-    ##
-    #  Checkers
-    ##
-
-    def isUnaligned(self) -> bool:
-        """Check if paragraph has any sort of alignment or margins."""
-        return all(
-            self._pAttr[n][1] is None for n in ["text-align", "margin-left", "margin-right"]
-        )
 
     ##
     #  Setters
@@ -1306,14 +1182,14 @@ class ODTParagraphStyle:
             self._tAttr["font-weight"][1] = None
         return
 
-    def setColour(self, value: str | None) -> None:
+    def setColor(self, value: QColor | None) -> None:
         """Set text colour."""
-        self._tAttr["color"][1] = value
-        return
-
-    def setOpacity(self, value: str | None) -> None:
-        """Set text opacity."""
-        self._tAttr["opacity"][1] = value
+        if isinstance(value, QColor):
+            self._tAttr["color"][1] = value.name(QtHexRgb)
+            self._tAttr["opacity"][1] = f"{int(100.0 * value.alphaF())}%"
+        else:
+            self._tAttr["color"][1] = None
+            self._tAttr["opacity"][1] = None
         return
 
     ##
@@ -1414,18 +1290,18 @@ class ODTTextStyle:
             self._tAttr["font-style"][1] = None
         return
 
-    def setColour(self, value: str | None) -> None:
+    def setColor(self, value: QColor | None) -> None:
         """Set text colour."""
-        if value and len(value) == 7 and value[0] == "#":
-            self._tAttr["color"][1] = value
+        if isinstance(value, QColor):
+            self._tAttr["color"][1] = value.name(QtHexRgb)
         else:
             self._tAttr["color"][1] = None
         return
 
-    def setBackgroundColour(self, value: str | None) -> None:
+    def setBackgroundColor(self, value: QColor | None) -> None:
         """Set text background colour."""
-        if value and len(value) == 7 and value[0] == "#":
-            self._tAttr["background-color"][1] = value
+        if isinstance(value, QColor):
+            self._tAttr["background-color"][1] = value.name(QtHexRgb)
         else:
             self._tAttr["background-color"][1] = None
         return
@@ -1470,7 +1346,7 @@ class ODTTextStyle:
             self._tAttr["text-underline-width"][1] = None
         return
 
-    def setUnderlineColour(self, value: str | None) -> None:
+    def setUnderlineColor(self, value: str | None) -> None:
         """Set text underline colour."""
         if value in self.VALID_LCOL:
             self._tAttr["text-underline-color"][1] = value
@@ -1595,13 +1471,22 @@ class XMLParagraph:
 
         return
 
-    def appendSpan(self, text: str, fmt: str) -> None:
+    def appendSpan(self, text: str, style: str, link: str) -> None:
         """Append a text span to the XML element. The span is always
-        closed since we do not allow nested spans (like Libre Office).
+        closed since we do not produce nested spans (like Libre Office).
         Therefore we return to the root element level when we're done
         processing the text of the span.
         """
-        self._xTail = ET.SubElement(self._xRoot, TAG_SPAN, attrib={TAG_STNM: fmt})
+        if link:
+            self._xTail = ET.SubElement(self._xRoot, _mkTag("text", "a"), attrib={
+                _mkTag("xlink", "type"): "simple",
+                _mkTag("xlink", "href"): link,
+                _mkTag("text", "style-name"): style,
+            })
+        else:
+            self._xTail = ET.SubElement(self._xRoot, TAG_SPAN, attrib={
+                _mkTag("text", "style-name"): style,
+            })
         self._xTail.text = ""  # Defaults to None
         self._xTail.tail = ""  # Defaults to None
         self._nState = X_SPAN_TEXT

@@ -20,10 +20,15 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 """
 from __future__ import annotations
 
+from unittest.mock import MagicMock
+
 import pytest
 
-from PyQt5.QtCore import QEvent, Qt, QThreadPool
-from PyQt5.QtGui import QClipboard, QFont, QMouseEvent, QTextBlock, QTextCursor, QTextOption
+from PyQt5.QtCore import QEvent, Qt, QThreadPool, QUrl
+from PyQt5.QtGui import (
+    QClipboard, QDesktopServices, QFont, QMouseEvent, QTextBlock, QTextCursor,
+    QTextOption
+)
 from PyQt5.QtWidgets import QAction, QApplication, QMenu
 
 from novelwriter import CONFIG, SHARED
@@ -34,7 +39,7 @@ from novelwriter.gui.doceditor import GuiDocEditor
 from novelwriter.text.counting import standardCounter
 from novelwriter.types import (
     QtAlignJustify, QtAlignLeft, QtKeepAnchor, QtModCtrl, QtMouseLeft,
-    QtMoveRight
+    QtMoveAnchor, QtMoveRight, QtScrollAlwaysOff, QtScrollAsNeeded
 )
 
 from tests.mocked import causeOSError
@@ -73,9 +78,9 @@ def testGuiEditor_Init(qtbot, nwGUI, projPath, ipsumText, mockRnd):
     # Check Defaults
     qDoc = docEditor.document()
     assert qDoc.defaultTextOption().alignment() == QtAlignLeft
-    assert docEditor.verticalScrollBarPolicy() == Qt.ScrollBarAsNeeded
-    assert docEditor.horizontalScrollBarPolicy() == Qt.ScrollBarAsNeeded
-    assert docEditor._typPadChar == nwUnicode.U_NBSP
+    assert docEditor.verticalScrollBarPolicy() == QtScrollAsNeeded
+    assert docEditor.horizontalScrollBarPolicy() == QtScrollAsNeeded
+    assert docEditor._typConf.typPadChar == nwUnicode.U_NBSP
     assert docEditor.docHeader.itemTitle.text() == (
         "Novel  \u203a  New Chapter  \u203a  New Scene"
     )
@@ -98,9 +103,9 @@ def testGuiEditor_Init(qtbot, nwGUI, projPath, ipsumText, mockRnd):
     assert qDoc.defaultTextOption().alignment() == QtAlignJustify
     assert qDoc.defaultTextOption().flags() & QTextOption.ShowTabsAndSpaces
     assert qDoc.defaultTextOption().flags() & QTextOption.ShowLineAndParagraphSeparators
-    assert docEditor.verticalScrollBarPolicy() == Qt.ScrollBarAlwaysOff
-    assert docEditor.horizontalScrollBarPolicy() == Qt.ScrollBarAlwaysOff
-    assert docEditor._typPadChar == nwUnicode.U_THNBSP
+    assert docEditor.verticalScrollBarPolicy() == QtScrollAlwaysOff
+    assert docEditor.horizontalScrollBarPolicy() == QtScrollAlwaysOff
+    assert docEditor._typConf.typPadChar == nwUnicode.U_THNBSP
     assert docEditor.docHeader.itemTitle.text() == "New Scene"
 
     # Header
@@ -267,8 +272,9 @@ def testGuiEditor_ContextMenu(monkeypatch, qtbot, nwGUI, projPath, mockRnd):
 
     docText = (
         "### A Scene\n\n"
-        "@pov: Jane\n"
-        "Some text ..."
+        "@pov: Jane\n\n"
+        "Some text ...\n\n"
+        "... and a link to http://example.com\n\n"
     )
     docEditor.setPlainText(docText)
     assert docEditor.getText() == docText
@@ -286,6 +292,17 @@ def testGuiEditor_ContextMenu(monkeypatch, qtbot, nwGUI, projPath, mockRnd):
         assert sceneItem.itemName == "New Scene"
         ctxMenu.actions()[0].trigger()
         assert sceneItem.itemName == "A Scene"
+    ctxMenu.setObjectName("")
+    ctxMenu.deleteLater()
+
+    # Open Link
+    ctxMenu = getMenuForPos(docEditor, 63)
+    assert ctxMenu is not None
+    actions = [x.text() for x in ctxMenu.actions() if x.text()]
+    assert actions == [
+        "Open URL", "Paste",
+        "Select All", "Select Word", "Select Paragraph"
+    ]
     ctxMenu.setObjectName("")
     ctxMenu.deleteLater()
 
@@ -453,9 +470,13 @@ def testGuiEditor_SpellChecking(qtbot, monkeypatch, nwGUI, projPath, ipsumText, 
         ctxMenu = getMenuForPos(docEditor, 16)
         assert ctxMenu is not None
         actions = [x.text() for x in ctxMenu.actions() if x.text()]
+        assert "Ignore Word" in actions
         assert "Add Word to Dictionary" in actions
+
         assert "Lorax" not in SHARED.spelling._userDict
-        ctxMenu.actions()[7].trigger()
+        ctxMenu.actions()[7].trigger()  # Ignore
+        assert "Lorax" not in SHARED.spelling._userDict
+        ctxMenu.actions()[8].trigger()  # Add
         assert "Lorax" in SHARED.spelling._userDict
         ctxMenu.setObjectName("")
         ctxMenu.deleteLater()
@@ -989,8 +1010,8 @@ def testGuiEditor_TextManipulation(qtbot, nwGUI, projPath, ipsumText, mockRnd):
     # Past Paragraph
     docEditor.replaceText(text)
     cursor = docEditor.textCursor()
-    cursor.setPosition(13, QTextCursor.MoveAnchor)
-    cursor.setPosition(1000, QTextCursor.KeepAnchor)
+    cursor.setPosition(13, QtMoveAnchor)
+    cursor.setPosition(1000, QtKeepAnchor)
     docEditor.setTextCursor(cursor)
     docEditor._wrapSelection("=")
 
@@ -1021,8 +1042,8 @@ def testGuiEditor_TextManipulation(qtbot, nwGUI, projPath, ipsumText, mockRnd):
     # Past Paragraph
     docEditor.replaceText(text)
     cursor = docEditor.textCursor()
-    cursor.setPosition(13, QTextCursor.MoveAnchor)
-    cursor.setPosition(1000, QTextCursor.KeepAnchor)
+    cursor.setPosition(13, QtMoveAnchor)
+    cursor.setPosition(1000, QtKeepAnchor)
     docEditor.setTextCursor(cursor)
     docEditor._toggleFormat(1, "=")
 
@@ -1130,8 +1151,8 @@ def testGuiEditor_TextManipulation(qtbot, nwGUI, projPath, ipsumText, mockRnd):
     text = "### A Scene\n\n%s\n\n%s" % (parOne, parTwo)
     docEditor.replaceText(text)
     cursor = docEditor.textCursor()
-    cursor.setPosition(16, QTextCursor.MoveAnchor)
-    cursor.setPosition(680, QTextCursor.KeepAnchor)
+    cursor.setPosition(16, QtMoveAnchor)
+    cursor.setPosition(680, QtKeepAnchor)
     docEditor.setTextCursor(cursor)
     docEditor._removeInParLineBreaks()
 
@@ -1153,16 +1174,16 @@ def testGuiEditor_TextManipulation(qtbot, nwGUI, projPath, ipsumText, mockRnd):
     assert docEditor.getText() == text
 
     # Select All
-    qtbot.keyClick(docEditor, Qt.Key_A, modifier=Qt.ControlModifier, delay=KEY_DELAY)
-    qtbot.keyClick(docEditor, Qt.Key_Delete, delay=KEY_DELAY)
+    qtbot.keyClick(docEditor, Qt.Key.Key_A, modifier=QtModCtrl, delay=KEY_DELAY)
+    qtbot.keyClick(docEditor, Qt.Key.Key_Delete, delay=KEY_DELAY)
     assert docEditor.getText() == ""
 
     # Undo
-    qtbot.keyClick(docEditor, Qt.Key_Z, modifier=Qt.ControlModifier, delay=KEY_DELAY)
+    qtbot.keyClick(docEditor, Qt.Key.Key_Z, modifier=QtModCtrl, delay=KEY_DELAY)
     assert docEditor.getText() == text
 
     # Redo
-    qtbot.keyClick(docEditor, Qt.Key_Y, modifier=Qt.ControlModifier, delay=KEY_DELAY)
+    qtbot.keyClick(docEditor, Qt.Key.Key_Y, modifier=QtModCtrl, delay=KEY_DELAY)
     assert docEditor.getText() == ""
 
     # qtbot.stop()
@@ -1653,6 +1674,30 @@ def testGuiEditor_Tags(qtbot, nwGUI, projPath, ipsumText, mockRnd):
 
 
 @pytest.mark.gui
+def testGuiEditor_Links(qtbot, monkeypatch, nwGUI, projPath, ipsumText, mockRnd):
+    """Test the document editor links functionality."""
+    buildTestProject(nwGUI, projPath)
+    nwGUI.openDocument(C.hSceneDoc)
+    docEditor = nwGUI.docEditor
+    docEditor.replaceText("### Scene\n\nFoo http://www.example.com bar.\n\n")
+
+    docEditor.setCursorPosition(20)
+    position = docEditor.cursorRect().center()
+    event = QMouseEvent(
+        QEvent.Type.MouseButtonPress, position, QtMouseLeft, QtMouseLeft, QtModCtrl
+    )
+
+    with monkeypatch.context() as mp:
+        openUrl = MagicMock()
+        mp.setattr(QDesktopServices, "openUrl", openUrl)
+        docEditor.mouseReleaseEvent(event)
+        assert openUrl.called is True
+        assert openUrl.call_args[0][0] == QUrl("http://www.example.com")
+
+    # qtbot.stop()
+
+
+@pytest.mark.gui
 def testGuiEditor_Completer(qtbot, nwGUI, projPath, mockRnd):
     """Test the document editor meta completer functionality."""
     buildTestProject(nwGUI, projPath)
@@ -1679,8 +1724,8 @@ def testGuiEditor_Completer(qtbot, nwGUI, projPath, mockRnd):
     nwGUI.docEditor.setFocus()
     for c in "### Scene One":
         qtbot.keyClick(docEditor, c, delay=KEY_DELAY)
-    qtbot.keyClick(docEditor, Qt.Key_Return, delay=KEY_DELAY)
-    qtbot.keyClick(docEditor, Qt.Key_Return, delay=KEY_DELAY)
+    qtbot.keyClick(docEditor, Qt.Key.Key_Return, delay=KEY_DELAY)
+    qtbot.keyClick(docEditor, Qt.Key.Key_Return, delay=KEY_DELAY)
 
     # Type Keyword @
     qtbot.keyClick(docEditor, "@", delay=KEY_DELAY)
@@ -1695,7 +1740,7 @@ def testGuiEditor_Completer(qtbot, nwGUI, projPath, mockRnd):
     assert len(completer.actions()) == 0
 
     # Delete character and go select @char
-    qtbot.keyClick(docEditor, Qt.Key_Backspace, delay=KEY_DELAY)
+    qtbot.keyClick(docEditor, Qt.Key.Key_Backspace, delay=KEY_DELAY)
     assert len(completer.actions()) == 2
     completer.actions()[0].trigger()
     assert docEditor.getText() == (
@@ -1712,13 +1757,13 @@ def testGuiEditor_Completer(qtbot, nwGUI, projPath, mockRnd):
     assert [a.text() for a in completer.actions()] == []
 
     # Deleting it and typing "a", should leave "Jane"
-    qtbot.keyClick(docEditor, Qt.Key_Backspace, delay=KEY_DELAY)
+    qtbot.keyClick(docEditor, Qt.Key.Key_Backspace, delay=KEY_DELAY)
     qtbot.keyClick(docEditor, "a", delay=KEY_DELAY)
     assert [a.text() for a in completer.actions()] == ["Jane"]
 
     # Selecting "Jane" should insert it
     completer.actions()[0].trigger()
-    qtbot.keyClick(docEditor, Qt.Key_Return, delay=KEY_DELAY)
+    qtbot.keyClick(docEditor, Qt.Key.Key_Return, delay=KEY_DELAY)
     assert docEditor.getText() == (
         "### Scene One\n\n"
         "@char: Jane\n"
@@ -1727,21 +1772,21 @@ def testGuiEditor_Completer(qtbot, nwGUI, projPath, mockRnd):
     # Start a new line with a nonsense keyword, which should be handled
     for c in "@: ":
         qtbot.keyClick(docEditor, c, delay=KEY_DELAY)
-    qtbot.keyClick(docEditor, Qt.Key_Backspace, delay=KEY_DELAY)
-    qtbot.keyClick(docEditor, Qt.Key_Backspace, delay=KEY_DELAY)
-    qtbot.keyClick(docEditor, Qt.Key_Backspace, delay=KEY_DELAY)
+    qtbot.keyClick(docEditor, Qt.Key.Key_Backspace, delay=KEY_DELAY)
+    qtbot.keyClick(docEditor, Qt.Key.Key_Backspace, delay=KEY_DELAY)
+    qtbot.keyClick(docEditor, Qt.Key.Key_Backspace, delay=KEY_DELAY)
 
     # Send keypresses to the completer object
     qtbot.keyClick(docEditor, "@", delay=KEY_DELAY)
     assert len(completer.actions()) == len(nwKeyWords.VALID_KEYS)
     qtbot.keyClick(completer, "f", delay=KEY_DELAY)
-    qtbot.keyClick(completer, Qt.Key_Down, delay=KEY_DELAY)
-    qtbot.keyClick(completer, Qt.Key_Return, delay=KEY_DELAY)
+    qtbot.keyClick(completer, Qt.Key.Key_Down, delay=KEY_DELAY)
+    qtbot.keyClick(completer, Qt.Key.Key_Return, delay=KEY_DELAY)
     qtbot.keyClick(completer, " ", delay=KEY_DELAY)
     qtbot.keyClick(completer, "h", delay=KEY_DELAY)
-    qtbot.keyClick(completer, Qt.Key_Down, delay=KEY_DELAY)
-    qtbot.keyClick(completer, Qt.Key_Return, delay=KEY_DELAY)
-    qtbot.keyClick(completer, Qt.Key_Escape, delay=KEY_DELAY)
+    qtbot.keyClick(completer, Qt.Key.Key_Down, delay=KEY_DELAY)
+    qtbot.keyClick(completer, Qt.Key.Key_Return, delay=KEY_DELAY)
+    qtbot.keyClick(completer, Qt.Key.Key_Escape, delay=KEY_DELAY)
     assert docEditor.getText() == (
         "### Scene One\n\n"
         "@char: Jane\n"
@@ -1881,13 +1926,13 @@ def testGuiEditor_Search(qtbot, monkeypatch, nwGUI, prjLipsum):
     assert cursor.selectedText() == "est"
 
     # Activate search
-    nwGUI.mainMenu.aFind.activate(QAction.Trigger)
+    nwGUI.mainMenu.aFind.activate(QAction.ActionEvent.Trigger)
     assert docSearch.isVisible()
     assert docSearch.searchText == "est"
 
     # Find next by enter key
     monkeypatch.setattr(docSearch.searchBox, "hasFocus", lambda: True)
-    qtbot.keyClick(docSearch.searchBox, Qt.Key_Return, delay=KEY_DELAY)
+    qtbot.keyClick(docSearch.searchBox, Qt.Key.Key_Return, delay=KEY_DELAY)
     assert abs(docEditor.getCursorPosition() - 1299) < 3
 
     # Find next by button
@@ -1895,16 +1940,16 @@ def testGuiEditor_Search(qtbot, monkeypatch, nwGUI, prjLipsum):
     assert abs(docEditor.getCursorPosition() - 1513) < 3
 
     # Activate loop search
-    docSearch.toggleLoop.activate(QAction.Trigger)
+    docSearch.toggleLoop.activate(QAction.ActionEvent.Trigger)
     assert docSearch.toggleLoop.isChecked()
     assert CONFIG.searchLoop is True
 
     # Find next by menu Search > Find Next
-    nwGUI.mainMenu.aFindNext.activate(QAction.Trigger)
+    nwGUI.mainMenu.aFindNext.activate(QAction.ActionEvent.Trigger)
     assert abs(docEditor.getCursorPosition() - 647) < 3
 
     # Close search
-    docSearch.cancelSearch.activate(QAction.Trigger)
+    docSearch.cancelSearch.activate(QAction.ActionEvent.Trigger)
     assert docSearch.isVisible() is False
     docEditor.setCursorPosition(15)
 
@@ -1920,7 +1965,7 @@ def testGuiEditor_Search(qtbot, monkeypatch, nwGUI, prjLipsum):
     assert docEditor.getCursorPosition() < 3  # No result
 
     # Enable RegEx search
-    docSearch.toggleRegEx.activate(QAction.Trigger)
+    docSearch.toggleRegEx.activate(QAction.ActionEvent.Trigger)
     assert docSearch.toggleRegEx.isChecked()
     assert CONFIG.searchRegEx is True
 
@@ -1943,50 +1988,50 @@ def testGuiEditor_Search(qtbot, monkeypatch, nwGUI, prjLipsum):
     assert abs(docEditor.getCursorPosition() - 223) < 3
 
     # Find next and then prev
-    nwGUI.mainMenu.aFindNext.activate(QAction.Trigger)
+    nwGUI.mainMenu.aFindNext.activate(QAction.ActionEvent.Trigger)
     assert abs(docEditor.getCursorPosition() - 324) < 3
-    nwGUI.mainMenu.aFindPrev.activate(QAction.Trigger)
+    nwGUI.mainMenu.aFindPrev.activate(QAction.ActionEvent.Trigger)
     assert abs(docEditor.getCursorPosition() - 223) < 3
 
     # Make RegEx case sensitive
-    docSearch.toggleCase.activate(QAction.Trigger)
+    docSearch.toggleCase.activate(QAction.ActionEvent.Trigger)
     assert docSearch.toggleCase.isChecked()
     assert CONFIG.searchCase is True
 
     # Find next/prev (one result)
-    nwGUI.mainMenu.aFindNext.activate(QAction.Trigger)
+    nwGUI.mainMenu.aFindNext.activate(QAction.ActionEvent.Trigger)
     assert abs(docEditor.getCursorPosition() - 626) < 3
-    nwGUI.mainMenu.aFindPrev.activate(QAction.Trigger)
+    nwGUI.mainMenu.aFindPrev.activate(QAction.ActionEvent.Trigger)
     assert abs(docEditor.getCursorPosition() - 626) < 3
-    nwGUI.mainMenu.aFindNext.activate(QAction.Trigger)
+    nwGUI.mainMenu.aFindNext.activate(QAction.ActionEvent.Trigger)
     assert abs(docEditor.getCursorPosition() - 626) < 3
 
     # Trigger replace
-    nwGUI.mainMenu.aReplace.activate(QAction.Trigger)
+    nwGUI.mainMenu.aReplace.activate(QAction.ActionEvent.Trigger)
     docSearch.setReplaceText("foo")
 
     # Disable RegEx case sensitive
-    docSearch.toggleCase.activate(QAction.Trigger)
+    docSearch.toggleCase.activate(QAction.ActionEvent.Trigger)
     assert docSearch.toggleCase.isChecked() is False
     assert CONFIG.searchCase is False
 
     # Toggle replace preserve case
-    docSearch.toggleMatchCap.activate(QAction.Trigger)
+    docSearch.toggleMatchCap.activate(QAction.ActionEvent.Trigger)
     assert docSearch.toggleMatchCap.isChecked()
     assert CONFIG.searchMatchCap is True
 
     # Replace "Sus" with "Foo" via menu
     docEditor.setCursorPosition(605)
-    nwGUI.mainMenu.aFindNext.activate(QAction.Trigger)
-    nwGUI.mainMenu.aReplaceNext.activate(QAction.Trigger)
+    nwGUI.mainMenu.aFindNext.activate(QAction.ActionEvent.Trigger)
+    nwGUI.mainMenu.aReplaceNext.activate(QAction.ActionEvent.Trigger)
     assert docEditor.getText()[623:634] == "Foopendisse"
 
     # Find next/prev to loop file
-    nwGUI.mainMenu.aFindNext.activate(QAction.Trigger)
+    nwGUI.mainMenu.aFindNext.activate(QAction.ActionEvent.Trigger)
     assert abs(docEditor.getCursorPosition() - 223) < 3
-    nwGUI.mainMenu.aFindPrev.activate(QAction.Trigger)
+    nwGUI.mainMenu.aFindPrev.activate(QAction.ActionEvent.Trigger)
     assert abs(docEditor.getCursorPosition() - 1805) < 3
-    nwGUI.mainMenu.aFindNext.activate(QAction.Trigger)
+    nwGUI.mainMenu.aFindNext.activate(QAction.ActionEvent.Trigger)
     assert abs(docEditor.getCursorPosition() - 223) < 3
 
     # Replace "sus" with "foo" via replace button
@@ -1999,53 +2044,53 @@ def testGuiEditor_Search(qtbot, monkeypatch, nwGUI, prjLipsum):
     assert docEditor.getText() == origText
 
     # Disable RegEx search
-    docSearch.toggleRegEx.activate(QAction.Trigger)
+    docSearch.toggleRegEx.activate(QAction.ActionEvent.Trigger)
     assert not docSearch.toggleRegEx.isChecked()
     assert CONFIG.searchRegEx is False
 
     # Close search and select "est" again
-    docSearch.cancelSearch.activate(QAction.Trigger)
+    docSearch.cancelSearch.activate(QAction.ActionEvent.Trigger)
     docEditor.setCursorPosition(645)
     docEditor._makeSelection(QTextCursor.WordUnderCursor)
     cursor = docEditor.textCursor()
     assert cursor.selectedText() == "est"
 
     # Activate search again
-    nwGUI.mainMenu.aFind.activate(QAction.Trigger)
+    nwGUI.mainMenu.aFind.activate(QAction.ActionEvent.Trigger)
     assert docSearch.isVisible()
     assert docSearch.searchText == "est"
 
     # Enable full word search
-    docSearch.toggleWord.activate(QAction.Trigger)
+    docSearch.toggleWord.activate(QAction.ActionEvent.Trigger)
     assert docSearch.toggleWord.isChecked()
     assert CONFIG.searchWord is True
 
     # Only one match
-    nwGUI.mainMenu.aFindNext.activate(QAction.Trigger)
+    nwGUI.mainMenu.aFindNext.activate(QAction.ActionEvent.Trigger)
     assert abs(docEditor.getCursorPosition() - 647) < 3
-    nwGUI.mainMenu.aFindNext.activate(QAction.Trigger)
+    nwGUI.mainMenu.aFindNext.activate(QAction.ActionEvent.Trigger)
     assert abs(docEditor.getCursorPosition() - 647) < 3
 
     # Enable next doc search
-    docSearch.toggleProject.activate(QAction.Trigger)
+    docSearch.toggleProject.activate(QAction.ActionEvent.Trigger)
     assert docSearch.toggleProject.isChecked()
     assert CONFIG.searchNextFile is True
 
     # Next match
-    nwGUI.mainMenu.aFindNext.activate(QAction.Trigger)
+    nwGUI.mainMenu.aFindNext.activate(QAction.ActionEvent.Trigger)
     assert docEditor.docHandle == "2426c6f0ca922"  # Next document
-    nwGUI.mainMenu.aFindNext.activate(QAction.Trigger)
+    nwGUI.mainMenu.aFindNext.activate(QAction.ActionEvent.Trigger)
     assert abs(docEditor.getCursorPosition() - 620) < 3
-    nwGUI.mainMenu.aFindNext.activate(QAction.Trigger)
+    nwGUI.mainMenu.aFindNext.activate(QAction.ActionEvent.Trigger)
     assert abs(docEditor.getCursorPosition() - 1127) < 3
 
     # Next doc, no match
     assert CONFIG.searchNextFile is True
     docSearch.setSearchText("abcdef")
-    nwGUI.mainMenu.aFindNext.activate(QAction.Trigger)
+    nwGUI.mainMenu.aFindNext.activate(QAction.ActionEvent.Trigger)
     assert docEditor.docHandle != "2426c6f0ca922"
     assert docEditor.docHandle == "04468803b92e1"
-    nwGUI.mainMenu.aFindNext.activate(QAction.Trigger)
+    nwGUI.mainMenu.aFindNext.activate(QAction.ActionEvent.Trigger)
     assert docEditor.docHandle != "04468803b92e1"
     assert docEditor.docHandle == "7a992350f3eb6"
 
@@ -2122,15 +2167,15 @@ def testGuiEditor_Search(qtbot, monkeypatch, nwGUI, prjLipsum):
     docEditor._lastFind = None
     docEditor.replaceNext()
     assert docEditor.textCursor().selectedText() == "a"
-    assert docEditor.getCursorPosition() == 92
+    assert docEditor.getCursorPosition() == 83
 
     # Iterate through the rest
-    finds = [104, 123, 175, 197, 206, 211, 220, 238, 250, 250]
-    for i in range(10):
+    finds = [85, 105, 110, 141, 169, 181, 200, 252, 274, 283, 288, 297]
+    for i in range(len(finds)):
         docEditor.replaceNext()
         assert docEditor.textCursor().selectedText() == "a"
         assert docEditor.getCursorPosition() == finds[i]
-    assert docEditor._lastFind == (249, 250)
+    assert docEditor._lastFind == (296, 297)
 
     # Search for something that doesn't exist
     docSearch.searchBox.setText("x")
@@ -2139,27 +2184,3 @@ def testGuiEditor_Search(qtbot, monkeypatch, nwGUI, prjLipsum):
     assert docEditor.textCursor().selectedText() == ""
 
     # qtbot.stop()
-
-
-@pytest.mark.gui
-def testGuiEditor_StaticMethods():
-    """Test the document editor's static methods."""
-    # Check the method that decides if it is allowed to insert a space
-    # before a colon using the French, Spanish, etc language feature
-    assert GuiDocEditor._allowSpaceBeforeColon("", "") is True
-    assert GuiDocEditor._allowSpaceBeforeColon("", ":") is True
-    assert GuiDocEditor._allowSpaceBeforeColon("some text", ":") is True
-
-    assert GuiDocEditor._allowSpaceBeforeColon("@:", ":") is False
-    assert GuiDocEditor._allowSpaceBeforeColon("@>", ">") is True
-
-    assert GuiDocEditor._allowSpaceBeforeColon("%", ":") is True
-    assert GuiDocEditor._allowSpaceBeforeColon("%:", ":") is True
-    assert GuiDocEditor._allowSpaceBeforeColon("%synopsis:", ":") is False
-    assert GuiDocEditor._allowSpaceBeforeColon("%Synopsis:", ":") is False
-    assert GuiDocEditor._allowSpaceBeforeColon("% synopsis:", ":") is False
-    assert GuiDocEditor._allowSpaceBeforeColon("% Synopsis:", ":") is False
-    assert GuiDocEditor._allowSpaceBeforeColon("%  synopsis:", ":") is False
-    assert GuiDocEditor._allowSpaceBeforeColon("%  Synopsis:", ":") is False
-    assert GuiDocEditor._allowSpaceBeforeColon("%synopsis :", ":") is True
-    assert GuiDocEditor._allowSpaceBeforeColon("%Synopsis :", ":") is True

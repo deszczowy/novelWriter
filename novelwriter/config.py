@@ -166,8 +166,9 @@ class Config:
 
         self.dialogStyle     = 2        # Quote type to use for dialogue
         self.allowOpenDial   = True     # Allow open-ended dialogue quotes
-        self.narratorBreak   = ""       # Symbol to use for narrator break
         self.dialogLine      = ""       # Symbol to use for dialogue line
+        self.narratorBreak   = ""       # Symbol to use for narrator break
+        self.narratorDialog  = ""       # Symbol for alternating between dialogue and narrator
         self.altDialogOpen   = ""       # Alternative dialog symbol, open
         self.altDialogClose  = ""       # Alternative dialog symbol, close
         self.highlightEmph   = True     # Add colour to text emphasis
@@ -256,6 +257,10 @@ class Config:
     @property
     def hasError(self) -> bool:
         return self._hasError
+
+    @property
+    def locale(self) -> QLocale:
+        return self._dLocale
 
     @property
     def recentProjects(self) -> RecentProjects:
@@ -665,10 +670,11 @@ class Config:
         self.showFullPath    = conf.rdBool(sec, "showfullpath", self.showFullPath)
         self.dialogStyle     = conf.rdInt(sec, "dialogstyle", self.dialogStyle)
         self.allowOpenDial   = conf.rdBool(sec, "allowopendial", self.allowOpenDial)
+        self.dialogLine      = conf.rdStr(sec, "dialogline", self.dialogLine)
         self.narratorBreak   = conf.rdStr(sec, "narratorbreak", self.narratorBreak)
+        self.narratorDialog  = conf.rdStr(sec, "narratordialog", self.narratorDialog)
         self.altDialogOpen   = conf.rdStr(sec, "altdialogopen", self.altDialogOpen)
         self.altDialogClose  = conf.rdStr(sec, "altdialogclose", self.altDialogClose)
-        self.dialogLine      = conf.rdStr(sec, "dialogline", self.dialogLine)
         self.highlightEmph   = conf.rdBool(sec, "highlightemph", self.highlightEmph)
         self.stopWhenIdle    = conf.rdBool(sec, "stopwhenidle", self.stopWhenIdle)
         self.userIdleTime    = conf.rdInt(sec, "useridletime", self.userIdleTime)
@@ -774,10 +780,11 @@ class Config:
             "showfullpath":    str(self.showFullPath),
             "dialogstyle":     str(self.dialogStyle),
             "allowopendial":   str(self.allowOpenDial),
+            "dialogline":      str(self.dialogLine),
             "narratorbreak":   str(self.narratorBreak),
+            "narratordialog":  str(self.narratorDialog),
             "altdialogopen":   str(self.altDialogOpen),
             "altdialogclose":  str(self.altDialogClose),
-            "dialogline":      str(self.dialogLine),
             "highlightemph":   str(self.highlightEmph),
             "stopwhenidle":    str(self.stopWhenIdle),
             "useridletime":    str(self.userIdleTime),

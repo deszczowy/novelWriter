@@ -34,7 +34,7 @@ from PyQt5.QtWidgets import (
 )
 
 from novelwriter import CONFIG, SHARED
-from novelwriter.common import describeFont
+from novelwriter.common import compact, describeFont, uniqueCompact
 from novelwriter.constants import nwUnicode
 from novelwriter.dialogs.quotes import GuiQuoteSelect
 from novelwriter.extensions.configlayout import NColourLabel, NScrollableForm
@@ -133,7 +133,7 @@ class GuiPreferences(NDialog):
         """Build the settings form."""
         section = 0
         iSz = SHARED.theme.baseIconSize
-        boxFixed = 5*SHARED.theme.textNWidth
+        boxFixed = 6*SHARED.theme.textNWidth
         minWidth = CONFIG.pxInt(200)
         fontWidth = CONFIG.pxInt(162)
 
@@ -543,33 +543,6 @@ class GuiPreferences(NDialog):
             self.tr("Applies to the selected quote styles.")
         )
 
-        self.allowOpenDial = NSwitch(self)
-        self.allowOpenDial.setChecked(CONFIG.allowOpenDial)
-        self.mainForm.addRow(
-            self.tr("Allow open-ended dialogue"), self.allowOpenDial,
-            self.tr("Highlight dialogue line with no closing quote.")
-        )
-
-        self.narratorBreak = QLineEdit(self)
-        self.narratorBreak.setMaxLength(1)
-        self.narratorBreak.setFixedWidth(boxFixed)
-        self.narratorBreak.setAlignment(QtAlignCenter)
-        self.narratorBreak.setText(CONFIG.narratorBreak)
-        self.mainForm.addRow(
-            self.tr("Dialogue narrator break symbol"), self.narratorBreak,
-            self.tr("Symbol to indicate injected narrator break.")
-        )
-
-        self.dialogLine = QLineEdit(self)
-        self.dialogLine.setMaxLength(1)
-        self.dialogLine.setFixedWidth(boxFixed)
-        self.dialogLine.setAlignment(QtAlignCenter)
-        self.dialogLine.setText(CONFIG.dialogLine)
-        self.mainForm.addRow(
-            self.tr("Dialogue line symbol"), self.dialogLine,
-            self.tr("Lines starting with this symbol are dialogue.")
-        )
-
         self.altDialogOpen = QLineEdit(self)
         self.altDialogOpen.setMaxLength(4)
         self.altDialogOpen.setFixedWidth(boxFixed)
@@ -585,6 +558,43 @@ class GuiPreferences(NDialog):
         self.mainForm.addRow(
             self.tr("Alternative dialogue symbols"), [self.altDialogOpen, self.altDialogClose],
             self.tr("Custom highlighting of dialogue text.")
+        )
+
+        self.allowOpenDial = NSwitch(self)
+        self.allowOpenDial.setChecked(CONFIG.allowOpenDial)
+        self.mainForm.addRow(
+            self.tr("Allow open-ended dialogue"), self.allowOpenDial,
+            self.tr("Highlight dialogue line with no closing quote.")
+        )
+
+        self.dialogLine = QLineEdit(self)
+        self.dialogLine.setMaxLength(4)
+        self.dialogLine.setFixedWidth(boxFixed)
+        self.dialogLine.setAlignment(QtAlignCenter)
+        self.dialogLine.setText(CONFIG.dialogLine)
+        self.mainForm.addRow(
+            self.tr("Dialogue line symbols"), self.dialogLine,
+            self.tr("Lines starting with any of these symbols are dialogue.")
+        )
+
+        self.narratorBreak = QLineEdit(self)
+        self.narratorBreak.setMaxLength(1)
+        self.narratorBreak.setFixedWidth(boxFixed)
+        self.narratorBreak.setAlignment(QtAlignCenter)
+        self.narratorBreak.setText(CONFIG.narratorBreak)
+        self.mainForm.addRow(
+            self.tr("Narrator break symbol"), self.narratorBreak,
+            self.tr("Symbol to indicate a narrator break in dialogue")
+        )
+
+        self.narratorDialog = QLineEdit(self)
+        self.narratorDialog.setMaxLength(1)
+        self.narratorDialog.setFixedWidth(boxFixed)
+        self.narratorDialog.setAlignment(QtAlignCenter)
+        self.narratorDialog.setText(CONFIG.narratorDialog)
+        self.mainForm.addRow(
+            self.tr("Alternating dialogue/narration symbol"), self.narratorDialog,
+            self.tr("Alternates dialogue highlighting within any paragraph.")
         )
 
         self.highlightEmph = NSwitch(self)
@@ -952,17 +962,19 @@ class GuiPreferences(NDialog):
         # Text Highlighting
         dialogueStyle   = self.dialogStyle.currentData()
         allowOpenDial   = self.allowOpenDial.isChecked()
-        narratorBreak   = self.narratorBreak.text()
-        dialogueLine    = self.dialogLine.text()
-        altDialogOpen   = self.altDialogOpen.text()
-        altDialogClose  = self.altDialogClose.text()
+        dialogueLine    = uniqueCompact(self.dialogLine.text())
+        narratorBreak   = self.narratorBreak.text().strip()
+        narratorDialog  = self.narratorDialog.text().strip()
+        altDialogOpen   = compact(self.altDialogOpen.text())
+        altDialogClose  = compact(self.altDialogClose.text())
         highlightEmph   = self.highlightEmph.isChecked()
         showMultiSpaces = self.showMultiSpaces.isChecked()
 
         updateSyntax |= CONFIG.dialogStyle != dialogueStyle
         updateSyntax |= CONFIG.allowOpenDial != allowOpenDial
-        updateSyntax |= CONFIG.narratorBreak != narratorBreak
         updateSyntax |= CONFIG.dialogLine != dialogueLine
+        updateSyntax |= CONFIG.narratorBreak != narratorBreak
+        updateSyntax |= CONFIG.narratorDialog != narratorDialog
         updateSyntax |= CONFIG.altDialogOpen != altDialogOpen
         updateSyntax |= CONFIG.altDialogClose != altDialogClose
         updateSyntax |= CONFIG.highlightEmph != highlightEmph
@@ -970,8 +982,9 @@ class GuiPreferences(NDialog):
 
         CONFIG.dialogStyle     = dialogueStyle
         CONFIG.allowOpenDial   = allowOpenDial
-        CONFIG.narratorBreak   = narratorBreak
         CONFIG.dialogLine      = dialogueLine
+        CONFIG.narratorBreak   = narratorBreak
+        CONFIG.narratorDialog  = narratorDialog
         CONFIG.altDialogOpen   = altDialogOpen
         CONFIG.altDialogClose  = altDialogClose
         CONFIG.highlightEmph   = highlightEmph
@@ -983,8 +996,8 @@ class GuiPreferences(NDialog):
         CONFIG.doReplaceDQuote = self.doReplaceDQuote.isChecked()
         CONFIG.doReplaceDash   = self.doReplaceDash.isChecked()
         CONFIG.doReplaceDots   = self.doReplaceDots.isChecked()
-        CONFIG.fmtPadBefore    = self.fmtPadBefore.text().strip()
-        CONFIG.fmtPadAfter     = self.fmtPadAfter.text().strip()
+        CONFIG.fmtPadBefore    = uniqueCompact(self.fmtPadBefore.text())
+        CONFIG.fmtPadAfter     = uniqueCompact(self.fmtPadAfter.text())
         CONFIG.fmtPadThin      = self.fmtPadThin.isChecked()
 
         # Quotation Style

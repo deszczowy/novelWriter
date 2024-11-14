@@ -23,8 +23,11 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 """
 from __future__ import annotations
 
-from PyQt5.QtCore import QRegularExpression, Qt
-from PyQt5.QtGui import QColor, QFont, QPainter, QTextCharFormat, QTextCursor, QTextFormat
+from PyQt5.QtCore import Qt
+from PyQt5.QtGui import (
+    QColor, QFont, QPainter, QTextBlockFormat, QTextCharFormat, QTextCursor,
+    QTextFormat
+)
 from PyQt5.QtWidgets import QDialog, QDialogButtonBox, QSizePolicy, QStyle
 
 # Qt Alignment Flags
@@ -48,10 +51,12 @@ QtVAlignNormal = QTextCharFormat.VerticalAlignment.AlignNormal
 QtVAlignSub = QTextCharFormat.VerticalAlignment.AlignSubScript
 QtVAlignSuper = QTextCharFormat.VerticalAlignment.AlignSuperScript
 
-# Qt Page Break
+# Qt Text Formats
 
 QtPageBreakBefore = QTextFormat.PageBreakFlag.PageBreak_AlwaysBefore
 QtPageBreakAfter = QTextFormat.PageBreakFlag.PageBreak_AlwaysAfter
+
+QtPropLineHeight = QTextBlockFormat.LineHeightTypes.ProportionalHeight
 
 # Qt Painter Types
 
@@ -64,6 +69,10 @@ QtSolidLine = Qt.PenStyle.SolidLine
 QtPaintAnitAlias = QPainter.RenderHint.Antialiasing
 QtMouseOver = QStyle.StateFlag.State_MouseOver
 QtSelected = QStyle.StateFlag.State_Selected
+
+# Qt Colour Types
+
+QtHexRgb = QColor.NameFormat.HexRgb
 
 # Qt Tree and Table Types
 
@@ -110,9 +119,10 @@ QtSizeIgnored = QSizePolicy.Policy.Ignored
 QtSizeMinimum = QSizePolicy.Policy.Minimum
 QtSizeMinimumExpanding = QSizePolicy.Policy.MinimumExpanding
 
-# Other
+# Scroll Bar Policy
 
-QRegExUnicode = QRegularExpression.PatternOption.UseUnicodePropertiesOption
+QtScrollAlwaysOff = Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+QtScrollAsNeeded = Qt.ScrollBarPolicy.ScrollBarAsNeeded
 
 # Maps
 
@@ -128,7 +138,7 @@ FONT_WEIGHTS: dict[int, int] = {
     QFont.Weight.Black:      900,
 }
 
-FONT_STYLE: dict[int, str] = {
+FONT_STYLE: dict[QFont.Style, str] = {
     QFont.Style.StyleNormal:  "normal",
     QFont.Style.StyleItalic:  "italic",
     QFont.Style.StyleOblique: "oblique",

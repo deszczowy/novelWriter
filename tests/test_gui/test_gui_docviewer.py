@@ -20,16 +20,17 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 """
 from __future__ import annotations
 
+from unittest.mock import MagicMock
+
 import pytest
 
 from PyQt5.QtCore import QEvent, QPoint, Qt, QUrl
-from PyQt5.QtGui import QMouseEvent, QTextCursor
+from PyQt5.QtGui import QDesktopServices, QMouseEvent, QTextCursor
 from PyQt5.QtWidgets import QAction, QApplication, QMenu
 
 from novelwriter import CONFIG, SHARED
-from novelwriter.core.toqdoc import ToQTextDocument
 from novelwriter.enum import nwDocAction
-from novelwriter.gui.docviewer import GuiDocViewer
+from novelwriter.formats.toqdoc import ToQTextDocument
 from novelwriter.types import QtModNone, QtMouseLeft
 
 from tests.mocked import causeException
@@ -40,7 +41,8 @@ def testGuiViewer_Main(qtbot, monkeypatch, nwGUI, prjLipsum):
     """Test the document viewer."""
     # Open project
     assert nwGUI.openProject(prjLipsum)
-    docViewer: GuiDocViewer = nwGUI.docViewer
+    docEditor = nwGUI.docEditor
+    docViewer = nwGUI.docViewer
 
     # Select a document in the project tree
     nwGUI.projView.setSelectedHandle("88243afbe5ed8")
@@ -71,6 +73,12 @@ def testGuiViewer_Main(qtbot, monkeypatch, nwGUI, prjLipsum):
     docViewer.setPlainText("Oops, all gone!")
     docViewer.docHeader._refreshDocument()
     assert docViewer.toPlainText() == origText
+
+    # Open in editor
+    nwGUI.closeDocument()
+    assert docEditor.docHandle is None
+    docViewer.docHeader._editDocument()
+    assert docEditor.docHandle == docViewer.docHandle
 
     # Select word
     cursor = docViewer.textCursor()
@@ -132,8 +140,8 @@ def testGuiViewer_Main(qtbot, monkeypatch, nwGUI, prjLipsum):
     assert docViewer.docAction(nwDocAction.COPY) is False
 
     # Open again via menu
-    assert nwGUI.projView.projTree.setSelectedHandle("88243afbe5ed8")
-    nwGUI.mainMenu.aViewDoc.activate(QAction.Trigger)
+    nwGUI.projView.projTree.setSelectedHandle("88243afbe5ed8")
+    nwGUI.mainMenu.aViewDoc.activate(QAction.ActionEvent.Trigger)
 
     # Open context menu
     menuOpened = False
@@ -164,6 +172,14 @@ def testGuiViewer_Main(qtbot, monkeypatch, nwGUI, prjLipsum):
     with qtbot.waitSignal(docViewer.sourceChanged, timeout=1000) as signal:
         docViewer._linkClicked(QUrl("#somewhere_else"))
         assert signal.args[0].url() == "#somewhere_else"
+
+    # Web links should trigger the browser
+    with monkeypatch.context() as mp:
+        openUrl = MagicMock()
+        mp.setattr(QDesktopServices, "openUrl", openUrl)
+        docViewer._linkClicked(QUrl("http://www.example.com"))
+        assert openUrl.called is True
+        assert openUrl.call_args[0][0] == QUrl("http://www.example.com")
 
     # Click mouse nav buttons
     qtbot.mouseClick(docViewer.viewport(), Qt.BackButton, pos=rect.center(), delay=100)

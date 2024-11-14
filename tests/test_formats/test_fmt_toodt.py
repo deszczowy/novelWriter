@@ -1,6 +1,6 @@
 """
 novelWriter – ToOdt Class Tester
-=================================
+================================
 
 This file is a part of novelWriter
 Copyright 2018–2024, Veronica Berglyd Olsen
@@ -27,34 +27,19 @@ from shutil import copyfile
 
 import pytest
 
+from PyQt5.QtGui import QColor
+
 from novelwriter.common import xmlIndent
 from novelwriter.constants import nwHeadFmt
 from novelwriter.core.project import NWProject
-from novelwriter.core.toodt import ODTParagraphStyle, ODTTextStyle, ToOdt, XMLParagraph, _mkTag
+from novelwriter.formats.shared import BlockFmt, BlockTyp, TextFmt
+from novelwriter.formats.toodt import ODTParagraphStyle, ODTTextStyle, ToOdt, XMLParagraph, _mkTag
 
-from tests.tools import ODT_IGNORE, cmpFiles
-
-XML_NS = [
-    ' xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"',
-    ' xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0"',
-    ' xmlns:loext="urn:org:documentfoundation:names:experimental:office:xmlns:loext:1.0"',
-    ' xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0"',
-    ' xmlns:meta="urn:oasis:names:tc:opendocument:xmlns:meta:1.0"',
-    ' xmlns:fo="urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0"',
-    ' xmlns:dc="http://purl.org/dc/elements/1.1/"'
-]
-
-
-def xmlToText(xElem):
-    """Get the text content of an XML element."""
-    rTxt = ET.tostring(xElem, encoding="utf-8", xml_declaration=False).decode()
-    for nSpace in XML_NS:
-        rTxt = rTxt.replace(nSpace, "")
-    return rTxt
+from tests.tools import ODT_IGNORE, cmpFiles, xmlToText
 
 
 @pytest.mark.core
-def testCoreToOdt_Init(mockGUI):
+def testFmtToOdt_Init(mockGUI):
     """Test initialisation of the ODT document."""
     project = NWProject()
 
@@ -106,7 +91,7 @@ def testCoreToOdt_Init(mockGUI):
 
 
 @pytest.mark.core
-def testCoreToOdt_TextFormatting(mockGUI):
+def testFmtToOdt_TextFormatting(mockGUI):
     """Test formatting of paragraphs."""
     project = NWProject()
     odt = ToOdt(project, isFlat=True)
@@ -183,7 +168,7 @@ def testCoreToOdt_TextFormatting(mockGUI):
 
     # Formatted Text
     text = "A bold word"
-    fmt = [(2, odt.FMT_B_B, ""), (6, odt.FMT_B_E, "")]
+    fmt = [(2, TextFmt.B_B, ""), (6, TextFmt.B_E, "")]
     xTest = ET.Element(_mkTag("office", "text"))
     odt._addTextPar(xTest, "Standard", oStyle, text, tFmt=fmt)
     assert odt.errData == []
@@ -196,10 +181,9 @@ def testCoreToOdt_TextFormatting(mockGUI):
 
     # Incorrectly Formatted Text
     text = "A few words"
-    fmt = [(2, odt.FMT_B_B, ""), (5, odt.FMT_B_E, ""), (7, 99999, "")]
+    fmt = [(2, TextFmt.B_B, ""), (5, TextFmt.B_E, ""), (7, 99999, "")]
     xTest = ET.Element(_mkTag("office", "text"))
     odt._addTextPar(xTest, "Standard", oStyle, text, tFmt=fmt)
-    assert odt.errData == ["Unknown format tag encountered"]
     assert xmlToText(xTest) == (
         '<office:text>'
         '<text:p text:style-name="Standard">A <text:span text:style-name="T1">few</text:span> '
@@ -210,7 +194,7 @@ def testCoreToOdt_TextFormatting(mockGUI):
 
     # Unclosed format
     text = "A bold word"
-    fmt = [(2, odt.FMT_B_B, "")]
+    fmt = [(2, TextFmt.B_B, "")]
     xTest = ET.Element(_mkTag("office", "text"))
     odt._addTextPar(xTest, "Standard", oStyle, text, tFmt=fmt)
     assert odt.errData == []
@@ -235,17 +219,57 @@ def testCoreToOdt_TextFormatting(mockGUI):
 
 
 @pytest.mark.core
-def testCoreToOdt_DialogueFormatting(mockGUI):
+def testFmtToOdt_Fields(mockGUI):
+    """Test formatting of footnotes."""
+    project = NWProject()
+    odt = ToOdt(project, True)
+    odt.initDocument()
+
+    # Field Builder
+    xNode = odt._generateField("a:allWords", 0x00)
+    assert isinstance(xNode, ET.Element)
+    assert xmlToText(xNode) == (
+        '<text:user-field-getstyle:data-style-name="N0" text:name="ManuscriptAllWords">'
+        '0</text:user-field-get>'
+    )
+    # assert odt._usedFields == [(xNode.find(_wTag("t")), "b")]
+
+    assert odt._generateField("a", 0x00) is None
+
+    # Full Processing
+    odt._text = (
+        "Word Count: [field:allWords]\n"
+        "Character Count: [field:allChars]\n"
+        "Chicken Count: [field:allChickens]\n"
+    )
+    odt.tokenizeText()
+    odt.doConvert()
+    odt.countStats()
+    assert xmlToText(odt._xBody) == (
+        '<office:body><office:text>'
+        '<text:p text:style-name="Text_20_body">'
+        'Word Count: <text:user-field-get style:data-style-name="N0" '
+        'text:name="ManuscriptAllWords">0</text:user-field-get><text:line-break />'
+        'Character Count: <text:user-field-get style:data-style-name="N0" '
+        'text:name="ManuscriptAllChars">0</text:user-field-get><text:line-break />'
+        'Chicken Count: <text:user-field-get style:data-style-name="N0" '
+        'text:name="ManuscriptAllChickens">0</text:user-field-get></text:p>'
+        '</office:text></office:body>'
+    )
+
+
+@pytest.mark.core
+def testFmtToOdt_DialogueFormatting(mockGUI):
     """Test formatting of dialogue."""
     project = NWProject()
     odt = ToOdt(project, isFlat=True)
-    odt.setDialogueHighlight(True)
+    odt.setDialogHighlight(True)
     odt.initDocument()
     oStyle = ODTParagraphStyle("test")
 
     # Regular dialogue
     text = "Text with 'dialogue in it.'"
-    fmt = [(10, odt.FMT_DL_B, ""), (27, odt.FMT_DL_E, "")]
+    fmt = [(10, TextFmt.COL_B, "dialog"), (27, TextFmt.COL_E, "")]
     xTest = ET.Element(_mkTag("office", "text"))
     odt._addTextPar(xTest, "Standard", oStyle, text, tFmt=fmt)
     assert odt.errData == []
@@ -258,7 +282,7 @@ def testCoreToOdt_DialogueFormatting(mockGUI):
 
     # Alternative dialogue
     text = "Text with ::dialogue in it.::"
-    fmt = [(10, odt.FMT_ADL_B, ""), (29, odt.FMT_ADL_E, "")]
+    fmt = [(10, TextFmt.COL_B, "altdialog"), (29, TextFmt.COL_E, "")]
     xTest = ET.Element(_mkTag("office", "text"))
     odt._addTextPar(xTest, "Standard", oStyle, text, tFmt=fmt)
     assert odt.errData == []
@@ -271,7 +295,7 @@ def testCoreToOdt_DialogueFormatting(mockGUI):
 
 
 @pytest.mark.core
-def testCoreToOdt_ConvertHeaders(mockGUI):
+def testFmtToOdt_ConvertHeaders(mockGUI):
     """Test the converter of the ToOdt class."""
     project = NWProject()
     odt = ToOdt(project, isFlat=True)
@@ -279,6 +303,7 @@ def testCoreToOdt_ConvertHeaders(mockGUI):
 
     # Header 1
     odt._text = "# Title\n"
+    odt.setPartitionFormat(f"Part{nwHeadFmt.BR}{nwHeadFmt.TITLE}")
     odt.tokenizeText()
     odt.initDocument()
     odt.doConvert()
@@ -286,12 +311,14 @@ def testCoreToOdt_ConvertHeaders(mockGUI):
     assert odt.errData == []
     assert xmlToText(odt._xText) == (
         '<office:text>'
-        '<text:h text:style-name="P1" text:outline-level="1">Title</text:h>'
+        '<text:h text:style-name="P1" text:outline-level="1">Part'
+        '<text:line-break />Title</text:h>'
         '</office:text>'
     )
 
     # Header 2
-    odt._text = "## Chapter\n"
+    odt._text = "## Title\n"
+    odt.setChapterFormat(f"Chapter {nwHeadFmt.CH_NUM}{nwHeadFmt.BR}{nwHeadFmt.TITLE}")
     odt.tokenizeText()
     odt.initDocument()
     odt.doConvert()
@@ -299,12 +326,14 @@ def testCoreToOdt_ConvertHeaders(mockGUI):
     assert odt.errData == []
     assert xmlToText(odt._xText) == (
         '<office:text>'
-        '<text:h text:style-name="P2" text:outline-level="2">Chapter</text:h>'
+        '<text:h text:style-name="P2" text:outline-level="2">Chapter 1'
+        '<text:line-break />Title</text:h>'
         '</office:text>'
     )
 
     # Header 3
-    odt._text = "### Scene\n"
+    odt._text = "### Title\n"
+    odt.setSceneFormat(f"Scene {nwHeadFmt.SC_ABS}{nwHeadFmt.BR}{nwHeadFmt.TITLE}")
     odt.tokenizeText()
     odt.initDocument()
     odt.doConvert()
@@ -312,12 +341,13 @@ def testCoreToOdt_ConvertHeaders(mockGUI):
     assert odt.errData == []
     assert xmlToText(odt._xText) == (
         '<office:text>'
-        '<text:h text:style-name="Heading_20_3" text:outline-level="3">Scene</text:h>'
+        '<text:h text:style-name="Heading_20_3" text:outline-level="3">Scene 1'
+        '<text:line-break />Title</text:h>'
         '</office:text>'
     )
 
     # Header 4
-    odt._text = "#### Section\n"
+    odt._text = "#### Title\n"
     odt.tokenizeText()
     odt.initDocument()
     odt.doConvert()
@@ -325,7 +355,7 @@ def testCoreToOdt_ConvertHeaders(mockGUI):
     assert odt.errData == []
     assert xmlToText(odt._xText) == (
         '<office:text>'
-        '<text:h text:style-name="Heading_20_4" text:outline-level="4">Section</text:h>'
+        '<text:h text:style-name="Heading_20_4" text:outline-level="4">Title</text:h>'
         '</office:text>'
     )
 
@@ -358,7 +388,7 @@ def testCoreToOdt_ConvertHeaders(mockGUI):
 
 
 @pytest.mark.core
-def testCoreToOdt_ConvertParagraphs(mockGUI):
+def testFmtToOdt_ConvertParagraphs(mockGUI):
     """Test the converter of the ToOdt class."""
     project = NWProject()
     odt = ToOdt(project, isFlat=True)
@@ -518,14 +548,17 @@ def testCoreToOdt_ConvertParagraphs(mockGUI):
     assert xmlToText(odt._xText) == (
         '<office:text>'
         '<text:h text:style-name="Heading_20_3" text:outline-level="3">Scene</text:h>'
-        '<text:p text:style-name="Text_20_Meta"><text:span text:style-name="T9">'
-        'Point of View:</text:span> Jane</text:p>'
-        '<text:p text:style-name="Text_20_Meta"><text:span text:style-name="T9">'
-        'Synopsis:</text:span> So it begins</text:p>'
-        '<text:p text:style-name="Text_20_Meta"><text:span text:style-name="T9">'
-        'Short Description:</text:span> Then what</text:p>'
-        '<text:p text:style-name="Text_20_Meta"><text:span text:style-name="T9">'
-        'Comment:</text:span> A plain comment</text:p>'
+        '<text:p text:style-name="Text_20_Meta"><text:span text:style-name="T10">'
+        'Point of View:</text:span> <text:span text:style-name="T11">Jane</text:span></text:p>'
+        '<text:p text:style-name="Text_20_Meta"><text:span text:style-name="T12">'
+        'Synopsis:</text:span> '
+        '<text:span text:style-name="T13">So it begins</text:span></text:p>'
+        '<text:p text:style-name="Text_20_Meta"><text:span text:style-name="T12">'
+        'Short Description:</text:span> '
+        '<text:span text:style-name="T13">Then what</text:span></text:p>'
+        '<text:p text:style-name="Text_20_Meta"><text:span text:style-name="T14">'
+        'Comment:</text:span> '
+        '<text:span text:style-name="T15">A plain comment</text:span></text:p>'
         '</office:text>'
     )
 
@@ -585,12 +618,12 @@ def testCoreToOdt_ConvertParagraphs(mockGUI):
     assert xmlToText(odt._xText) == (
         '<office:text>'
         '<text:h text:style-name="Heading_20_3" text:outline-level="3">Scene</text:h>'
-        '<text:p text:style-name="P1"><text:span text:style-name="T9">'
-        'Point of View:</text:span> Jane</text:p>'
-        '<text:p text:style-name="P2"><text:span text:style-name="T9">'
-        'Characters:</text:span> John</text:p>'
-        '<text:p text:style-name="Text_20_Meta"><text:span text:style-name="T9">'
-        'Plot:</text:span> Main</text:p>'
+        '<text:p text:style-name="P1"><text:span text:style-name="T10">'
+        'Point of View:</text:span> <text:span text:style-name="T11">Jane</text:span></text:p>'
+        '<text:p text:style-name="P2"><text:span text:style-name="T10">'
+        'Characters:</text:span> <text:span text:style-name="T11">John</text:span></text:p>'
+        '<text:p text:style-name="Text_20_Meta"><text:span text:style-name="T10">'
+        'Plot:</text:span> <text:span text:style-name="T11">Main</text:span></text:p>'
         '<text:p text:style-name="P3">Right align</text:p>'
         '<text:p text:style-name="Text_20_body">Left Align</text:p>'
         '<text:p text:style-name="P4">Centered</text:p>'
@@ -618,16 +651,17 @@ def testCoreToOdt_ConvertParagraphs(mockGUI):
     odt.initDocument()
     odt.doConvert()
     odt.closeDocument()
+    odt.setJustify(False)
     assert odt.errData == []
     assert xmlToText(odt._xText) == (
         '<office:text>'
         '<text:h text:style-name="Heading_20_3" text:outline-level="3">Scene</text:h>'
-        '<text:p text:style-name="Text_20_body">Regular paragraph</text:p>'
+        '<text:p text:style-name="P7">Regular paragraph</text:p>'
         '<text:p text:style-name="Text_20_body">with<text:line-break />break</text:p>'
-        '<text:p text:style-name="P7">Left Align</text:p>'
+        '<text:p text:style-name="Text_20_body">Left Align</text:p>'
         '</office:text>'
     )
-    assert getStyle("P7")._pAttr["text-align"] == ["fo", "left"]  # type: ignore
+    assert getStyle("P7")._pAttr["text-align"] == ["fo", "justify"]  # type: ignore
 
     # Page Breaks
     odt._text = (
@@ -699,14 +733,14 @@ def testCoreToOdt_ConvertParagraphs(mockGUI):
     assert odt.errData == []
     assert xmlToText(odt._xText) == (
         '<office:text>'
-        '<text:p text:style-name="Text_20_body">Test text **<text:span text:style-name="T10">'
+        '<text:p text:style-name="Text_20_body">Test text **<text:span text:style-name="T16">'
         'bold</text:span>** and more.</text:p>'
         '</office:text>'
     )
 
 
 @pytest.mark.core
-def testCoreToOdt_ConvertDirect(mockGUI):
+def testFmtToOdt_ConvertDirect(mockGUI):
     """Test the converter directly using the ToOdt class to reach some
     otherwise hard to reach conditions.
     """
@@ -717,8 +751,8 @@ def testCoreToOdt_ConvertDirect(mockGUI):
 
     # Justified
     doc = ToOdt(project, isFlat=True)
-    doc._tokens = [
-        (doc.T_TEXT, 1, "This is a paragraph", [], doc.A_JUSTIFY),
+    doc._blocks = [
+        (BlockTyp.TEXT, "", "This is a paragraph", [], BlockFmt.JUSTIFY),
     ]
     doc.initDocument()
     doc.doConvert()
@@ -737,8 +771,8 @@ def testCoreToOdt_ConvertDirect(mockGUI):
 
     # Page Break After
     doc = ToOdt(project, isFlat=True)
-    doc._tokens = [
-        (doc.T_TEXT, 1, "This is a paragraph", [], doc.A_PBA),
+    doc._blocks = [
+        (BlockTyp.TEXT, "", "This is a paragraph", [], BlockFmt.PBA),
     ]
     doc.initDocument()
     doc.doConvert()
@@ -757,7 +791,7 @@ def testCoreToOdt_ConvertDirect(mockGUI):
 
 
 @pytest.mark.core
-def testCoreToOdt_SaveFlat(mockGUI, fncPath, tstPaths):
+def testFmtToOdt_SaveFlat(mockGUI, fncPath, tstPaths, ipsumText):
     """Test the document save functions."""
     project = NWProject()
     project.data.setAuthor("Jane Smith")
@@ -767,19 +801,8 @@ def testCoreToOdt_SaveFlat(mockGUI, fncPath, tstPaths):
 
     odt = ToOdt(project, isFlat=True)
     odt._isNovel = True
-    odt._dLanguage = ""
-    odt.setLanguage(None)  # type: ignore
-    assert odt._dLanguage == ""
-    odt.setLanguage("nb_NO")
-    assert odt._dLanguage == "nb"
-    odt.setColourHeaders(True)
-    assert odt._colourHead is True
-    odt.setHeaderFormat(nwHeadFmt.ODT_AUTO, 1)
-    assert odt._headerFormat == nwHeadFmt.ODT_AUTO
-    odt.setFirstLineIndent(True, 1.4, False)
-    assert odt._firstIndent is True
-    assert odt._fTextIndent == "0.499cm"
-    assert odt._indentFirst is False
+    odt.setHeaderFormat(nwHeadFmt.DOC_AUTO, 1)
+    assert odt._headerFormat == nwHeadFmt.DOC_AUTO
 
     odt.setPageLayout(148, 210, 20, 18, 17, 15)
     assert odt._mDocWidth  == "14.800cm"
@@ -790,21 +813,27 @@ def testCoreToOdt_SaveFlat(mockGUI, fncPath, tstPaths):
     assert odt._mDocRight  == "1.500cm"
 
     odt._text = (
+        "#! My Novel\n\n"
+        "**Word Count: [field:allWords]**\n"
+        "[field:paragraphCount] paragrphs\n"
+        "Web: http://example.com\n\n"
         "## Chapter One\n\n"
-        "Text\n\n"
+        f"{ipsumText[0]}\n\n"
         "## Chapter Two\n\n"
-        "Text\n\n"
+        f"{ipsumText[1]}[footnote:abc]\n\n"
+        "%Footnote.abc: Lorem ipsum\n\n"
     )
     odt.tokenizeText()
     odt.initDocument()
     odt.doConvert()
+    odt.countStats()
     odt.closeDocument()
 
     flatFile = fncPath / "document.fodt"
-    testFile = tstPaths.outDir / "coreToOdt_SaveFlat_document.fodt"
-    compFile = tstPaths.refDir / "coreToOdt_SaveFlat_document.fodt"
+    testFile = tstPaths.outDir / "fmtToOdt_SaveFlat_document.fodt"
+    compFile = tstPaths.refDir / "fmtToOdt_SaveFlat_document.fodt"
 
-    odt.saveFlatXML(flatFile)
+    odt.saveDocument(flatFile)
     assert flatFile.exists()
 
     copyfile(flatFile, testFile)
@@ -812,7 +841,7 @@ def testCoreToOdt_SaveFlat(mockGUI, fncPath, tstPaths):
 
 
 @pytest.mark.core
-def testCoreToOdt_SaveFull(mockGUI, fncPath, tstPaths):
+def testFmtToOdt_SaveFull(mockGUI, fncPath, tstPaths, ipsumText):
     """Test the document save functions."""
     project = NWProject()
     project.data.setAuthor("Jane Smith")
@@ -824,38 +853,44 @@ def testCoreToOdt_SaveFull(mockGUI, fncPath, tstPaths):
     odt._isNovel = True
 
     # Set a format without page number
-    odt.setHeaderFormat(f"{nwHeadFmt.ODT_PROJECT} - {nwHeadFmt.ODT_AUTHOR}", 0)
+    odt.setHeaderFormat(f"{nwHeadFmt.DOC_PROJECT} - {nwHeadFmt.DOC_AUTHOR}", 0)
 
     odt._text = (
+        "#! My Novel\n\n"
+        "**Word Count: [field:allWords]**\n"
+        "[field:paragraphCount] paragrphs\n"
+        "Web: http://example.com\n\n"
         "## Chapter One\n\n"
-        "Text\n\n"
+        f"{ipsumText[0]}\n\n"
         "## Chapter Two\n\n"
-        "Text\n\n"
+        f"{ipsumText[1]}[footnote:abc]\n\n"
+        "%Footnote.abc: Lorem ipsum\n\n"
     )
     odt.tokenizeText()
     odt.initDocument()
     odt.doConvert()
+    odt.countStats()
     odt.closeDocument()
 
     fullFile = fncPath / "document.odt"
 
-    odt.saveOpenDocText(fullFile)
+    odt.saveDocument(fullFile)
     assert fullFile.exists()
     assert zipfile.is_zipfile(fullFile)
 
-    maniFile = tstPaths.outDir / "coreToOdt_SaveFull_manifest.xml"
-    settFile = tstPaths.outDir / "coreToOdt_SaveFull_settings.xml"
-    contFile = tstPaths.outDir / "coreToOdt_SaveFull_content.xml"
-    metaFile = tstPaths.outDir / "coreToOdt_SaveFull_meta.xml"
-    stylFile = tstPaths.outDir / "coreToOdt_SaveFull_styles.xml"
+    maniFile = tstPaths.outDir / "fmtToOdt_SaveFull_manifest.xml"
+    settFile = tstPaths.outDir / "fmtToOdt_SaveFull_settings.xml"
+    contFile = tstPaths.outDir / "fmtToOdt_SaveFull_content.xml"
+    metaFile = tstPaths.outDir / "fmtToOdt_SaveFull_meta.xml"
+    stylFile = tstPaths.outDir / "fmtToOdt_SaveFull_styles.xml"
 
-    maniComp = tstPaths.refDir / "coreToOdt_SaveFull_manifest.xml"
-    settComp = tstPaths.refDir / "coreToOdt_SaveFull_settings.xml"
-    contComp = tstPaths.refDir / "coreToOdt_SaveFull_content.xml"
-    metaComp = tstPaths.refDir / "coreToOdt_SaveFull_meta.xml"
-    stylComp = tstPaths.refDir / "coreToOdt_SaveFull_styles.xml"
+    maniComp = tstPaths.refDir / "fmtToOdt_SaveFull_manifest.xml"
+    settComp = tstPaths.refDir / "fmtToOdt_SaveFull_settings.xml"
+    contComp = tstPaths.refDir / "fmtToOdt_SaveFull_content.xml"
+    metaComp = tstPaths.refDir / "fmtToOdt_SaveFull_meta.xml"
+    stylComp = tstPaths.refDir / "fmtToOdt_SaveFull_styles.xml"
 
-    extaxtTo = tstPaths.outDir / "coreToOdt_SaveFull"
+    extaxtTo = tstPaths.outDir / "fmtToOdt_SaveFull"
 
     with zipfile.ZipFile(fullFile, mode="r") as zipObj:
         zipObj.extract("META-INF/manifest.xml", extaxtTo)
@@ -864,11 +899,11 @@ def testCoreToOdt_SaveFull(mockGUI, fncPath, tstPaths):
         zipObj.extract("meta.xml", extaxtTo)
         zipObj.extract("styles.xml", extaxtTo)
 
-    maniOut = tstPaths.outDir / "coreToOdt_SaveFull" / "META-INF" / "manifest.xml"
-    settOut = tstPaths.outDir / "coreToOdt_SaveFull" / "settings.xml"
-    contOut = tstPaths.outDir / "coreToOdt_SaveFull" / "content.xml"
-    metaOut = tstPaths.outDir / "coreToOdt_SaveFull" / "meta.xml"
-    stylOut = tstPaths.outDir / "coreToOdt_SaveFull" / "styles.xml"
+    maniOut = tstPaths.outDir / "fmtToOdt_SaveFull" / "META-INF" / "manifest.xml"
+    settOut = tstPaths.outDir / "fmtToOdt_SaveFull" / "settings.xml"
+    contOut = tstPaths.outDir / "fmtToOdt_SaveFull" / "content.xml"
+    metaOut = tstPaths.outDir / "fmtToOdt_SaveFull" / "meta.xml"
+    stylOut = tstPaths.outDir / "fmtToOdt_SaveFull" / "styles.xml"
 
     def prettifyXml(inFile, outFile):
         with open(outFile, mode="wb") as fStream:
@@ -890,38 +925,7 @@ def testCoreToOdt_SaveFull(mockGUI, fncPath, tstPaths):
 
 
 @pytest.mark.core
-def testCoreToOdt_SpecialFormats(mockGUI):
-    """Test the special formatters for the ToOdt class."""
-    project = NWProject()
-    odt = ToOdt(project, isFlat=True)
-
-    assert odt._formatSynopsis("synopsis text", [(9, ToOdt.FMT_STRIP, "")], True) == (
-        "Synopsis: synopsis text", [
-            (0, ToOdt.FMT_B_B, ""), (9, ToOdt.FMT_B_E, ""), (19, ToOdt.FMT_STRIP, "")
-        ]
-    )
-    assert odt._formatSynopsis("short text", [(6, ToOdt.FMT_STRIP, "")], False) == (
-        "Short Description: short text", [
-            (0, ToOdt.FMT_B_B, ""), (18, ToOdt.FMT_B_E, ""), (25, ToOdt.FMT_STRIP, "")
-        ]
-    )
-    assert odt._formatComments("comment text", [(8, ToOdt.FMT_STRIP, "")]) == (
-        "Comment: comment text", [
-            (0, ToOdt.FMT_B_B, ""), (8, ToOdt.FMT_B_E, ""), (17, ToOdt.FMT_STRIP, "")
-        ]
-    )
-
-    assert odt._formatKeywords("") == ("", [])
-    assert odt._formatKeywords("tag: Jane") == (
-        "Tag: Jane", [(0, ToOdt.FMT_B_B, ""), (4, ToOdt.FMT_B_E, "")]
-    )
-    assert odt._formatKeywords("char: Bod, Jane") == (
-        "Characters: Bod, Jane", [(0, ToOdt.FMT_B_B, ""), (11, ToOdt.FMT_B_E, "")]
-    )
-
-
-@pytest.mark.core
-def testCoreToOdt_ODTParagraphStyle():
+def testFmtToOdt_ODTParagraphStyle():
     """Test the ODTParagraphStyle class."""
     parStyle = ODTParagraphStyle("test")
 
@@ -978,8 +982,6 @@ def testCoreToOdt_ODTParagraphStyle():
     assert parStyle._pAttr["text-indent"]   == ["fo", None]
     assert parStyle._pAttr["line-height"]   == ["fo", None]
 
-    assert parStyle.isUnaligned() is True
-
     parStyle.setMarginTop("0.000cm")
     parStyle.setMarginBottom("0.000cm")
     parStyle.setMarginLeft("0.000cm")
@@ -993,8 +995,6 @@ def testCoreToOdt_ODTParagraphStyle():
     assert parStyle._pAttr["margin-right"]  == ["fo", "0.000cm"]
     assert parStyle._pAttr["text-indent"]   == ["fo", "0.000cm"]
     assert parStyle._pAttr["line-height"]   == ["fo", "1.15"]
-
-    assert parStyle.isUnaligned() is False
 
     # Text Alignment
     assert parStyle._pAttr["text-align"] == ["fo", None]
@@ -1106,11 +1106,15 @@ def testCoreToOdt_ODTParagraphStyle():
     assert parStyle._tAttr["color"]   == ["fo", None]
     assert parStyle._tAttr["opacity"] == ["loext", None]
 
-    parStyle.setColour("#000000")
-    parStyle.setOpacity("1.00")
+    parStyle.setColor(QColor(0, 0, 0, 128))
 
     assert parStyle._tAttr["color"]   == ["fo", "#000000"]
-    assert parStyle._tAttr["opacity"] == ["loext", "1.00"]
+    assert parStyle._tAttr["opacity"] == ["loext", "50%"]
+
+    parStyle.setColor(None)
+
+    assert parStyle._tAttr["color"]   == ["fo", None]
+    assert parStyle._tAttr["opacity"] == ["loext", None]
 
     # Pack XML
     # ========
@@ -1124,7 +1128,7 @@ def testCoreToOdt_ODTParagraphStyle():
         'fo:margin-left="0.000cm" fo:margin-right="0.000cm" fo:text-indent="0.000cm" '
         'fo:line-height="1.15" />'
         '<style:text-properties style:font-name="Verdana" fo:font-family="Verdana" '
-        'fo:font-size="12pt" fo:color="#000000" loext:opacity="1.00" />'
+        'fo:font-size="12pt" />'
         '</style:style>'
         '</test>'
     )
@@ -1151,14 +1155,14 @@ def testCoreToOdt_ODTParagraphStyle():
 
     aStyle = ODTParagraphStyle("test")
     oStyle = ODTParagraphStyle("test")
-    aStyle.setColour("#000000")
-    oStyle.setColour("#111111")
+    aStyle.setColor(QColor(0, 0, 0))
+    oStyle.setColor(QColor(42, 42, 42))
     assert aStyle.checkNew(oStyle) is True
     assert aStyle.getID() != oStyle.getID()
 
 
 @pytest.mark.core
-def testCoreToOdt_ODTTextStyle():
+def testFmtToOdt_ODTTextStyle():
     """Test the ODTTextStyle class."""
     txtStyle = ODTTextStyle("test")
 
@@ -1206,24 +1210,20 @@ def testCoreToOdt_ODTTextStyle():
 
     # Text Color
     assert txtStyle._tAttr["color"] == ["fo", None]
-    txtStyle.setColour("stuff")
+    txtStyle.setColor("#012345")  # type: ignore
     assert txtStyle._tAttr["color"] == ["fo", None]
-    txtStyle.setColour("012345")
-    assert txtStyle._tAttr["color"] == ["fo", None]
-    txtStyle.setColour("#012345")
-    assert txtStyle._tAttr["color"] == ["fo", "#012345"]
-    txtStyle.setColour("stuff")
+    txtStyle.setColor(QColor(255, 128, 0))
+    assert txtStyle._tAttr["color"] == ["fo", "#ff8000"]
+    txtStyle.setColor(None)
     assert txtStyle._tAttr["color"] == ["fo", None]
 
     # Background Color
     assert txtStyle._tAttr["background-color"] == ["fo", None]
-    txtStyle.setBackgroundColour("stuff")
+    txtStyle.setBackgroundColor("#012345")  # type: ignore
     assert txtStyle._tAttr["background-color"] == ["fo", None]
-    txtStyle.setBackgroundColour("012345")
-    assert txtStyle._tAttr["background-color"] == ["fo", None]
-    txtStyle.setBackgroundColour("#012345")
-    assert txtStyle._tAttr["background-color"] == ["fo", "#012345"]
-    txtStyle.setBackgroundColour("stuff")
+    txtStyle.setBackgroundColor(QColor(255, 128, 0))
+    assert txtStyle._tAttr["background-color"] == ["fo", "#ff8000"]
+    txtStyle.setBackgroundColor(None)
     assert txtStyle._tAttr["background-color"] == ["fo", None]
 
     # Text Position
@@ -1283,11 +1283,11 @@ def testCoreToOdt_ODTTextStyle():
 
     # Underline Colour
     assert txtStyle._tAttr["text-underline-color"] == ["style", None]
-    txtStyle.setUnderlineColour("stuff")
+    txtStyle.setUnderlineColor("stuff")
     assert txtStyle._tAttr["text-underline-color"] == ["style", None]
-    txtStyle.setUnderlineColour("font-color")
+    txtStyle.setUnderlineColor("font-color")
     assert txtStyle._tAttr["text-underline-color"] == ["style", "font-color"]
-    txtStyle.setUnderlineColour("stuff")
+    txtStyle.setUnderlineColor("stuff")
     assert txtStyle._tAttr["text-underline-color"] == ["style", None]
 
     # Pack XML
@@ -1308,7 +1308,7 @@ def testCoreToOdt_ODTTextStyle():
 
 
 @pytest.mark.core
-def testCoreToOdt_XMLParagraph():
+def testFmtToOdt_XMLParagraph():
     """Test XML encoding of paragraph."""
     # Stage 1 : Text
     # ==============
@@ -1326,7 +1326,7 @@ def testCoreToOdt_XMLParagraph():
     )
 
     # Text Span
-    xmlPar.appendSpan("spanned text", "T1")
+    xmlPar.appendSpan("spanned text", "T1", "")
     assert xmlToText(xRoot) == (
         '<root>'
         '<text:p>Hello World'
@@ -1363,7 +1363,7 @@ def testCoreToOdt_XMLParagraph():
     )
 
     # Text Span w/Line Break
-    xmlPar.appendSpan("spanned\ntext", "T1")
+    xmlPar.appendSpan("spanned\ntext", "T1", "")
     assert xmlToText(xRoot) == (
         '<root>'
         '<text:p>Hello<text:line-break />World<text:line-break />!!'
@@ -1399,7 +1399,7 @@ def testCoreToOdt_XMLParagraph():
     )
 
     # Text Span w/Line Break
-    xmlPar.appendSpan("spanned\ttext", "T1")
+    xmlPar.appendSpan("spanned\ttext", "T1", "")
     assert xmlToText(xRoot) == (
         '<root>'
         '<text:p>Hello<text:tab />World<text:tab />!!'
@@ -1414,6 +1414,18 @@ def testCoreToOdt_XMLParagraph():
         '<text:p>Hello<text:tab />World<text:tab />!!'
         '<text:span text:style-name="T1">spanned<text:tab />text</text:span>'
         'more<text:tab />text</text:p>'
+        '</root>'
+    )
+
+    # Tail Text w/Link
+    xmlPar.appendSpan("Example", "T1", "http://www.example.com")
+    assert xmlToText(xRoot) == (
+        '<root>'
+        '<text:p>Hello<text:tab />World<text:tab />!!'
+        '<text:span text:style-name="T1">spanned<text:tab />text</text:span>'
+        'more<text:tab />text'
+        '<text:a xlink:type="simple" xlink:href="http://www.example.com" text:style-name="T1">'
+        'Example</text:a></text:p>'
         '</root>'
     )
 
@@ -1435,7 +1447,7 @@ def testCoreToOdt_XMLParagraph():
     )
 
     # Text Span w/Spaces
-    xmlPar.appendSpan("spanned    text", "T1")
+    xmlPar.appendSpan("spanned    text", "T1", "")
     assert xmlToText(xRoot) == (
         '<root>'
         '<text:p>Hello <text:s />World <text:s text:c="2" />!!'
@@ -1471,7 +1483,7 @@ def testCoreToOdt_XMLParagraph():
     )
 
     # Text Span w/Many Spaces
-    xmlPar.appendSpan("  C  \t  D \n E ", "T1")
+    xmlPar.appendSpan("  C  \t  D \n E ", "T1", "")
     assert xmlToText(xRoot) == (
         '<root>'
         '<text:p><text:s text:c="2" /><text:tab /> A <text:line-break /> <text:s />B '
@@ -1497,7 +1509,7 @@ def testCoreToOdt_XMLParagraph():
 
 
 @pytest.mark.core
-def testCoreToOdt_MkTag():
+def testFmtToOdt_MkTag():
     """Test the tag maker function."""
     assert _mkTag("office", "text") == "{urn:oasis:names:tc:opendocument:xmlns:office:1.0}text"
     assert _mkTag("style", "text") == "{urn:oasis:names:tc:opendocument:xmlns:style:1.0}text"

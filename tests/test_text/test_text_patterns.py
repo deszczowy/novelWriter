@@ -20,26 +20,112 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 """
 from __future__ import annotations
 
-import pytest
+import re
 
-from PyQt5.QtCore import QRegularExpression
+import pytest
 
 from novelwriter import CONFIG
 from novelwriter.constants import nwUnicode
-from novelwriter.text.patterns import REGEX_PATTERNS
+from novelwriter.text.patterns import REGEX_PATTERNS, DialogParser
 
 
-def allMatches(regEx: QRegularExpression, text: str) -> list[list[str]]:
+def allMatches(regEx: re.Pattern, text: str) -> list[list[str]]:
     """Get all matches for a regex."""
     result = []
-    itt = regEx.globalMatch(text, 0)
-    while itt.hasNext():
-        match = itt.next()
+    for res in regEx.finditer(text):
         result.append([
-            (match.captured(n), match.capturedStart(n), match.capturedEnd(n))
-            for n in range(match.lastCapturedIndex() + 1)
+            (res.group(n), res.start(n), res.end(n))
+            for n in range((res.lastindex or 0) + 1)
         ])
     return result
+
+
+@pytest.mark.core
+def testTextPatterns_Urls():
+    """Test the URL regex."""
+    regEx = REGEX_PATTERNS.url
+
+    valid = [
+        "http://example.com",
+        "http://example.com/",
+        "http://example.com/path+to+page",
+        "http://example.com/path-to-page",
+        "http://example.com/path_to_page",
+        "http://example.com/path~to~page",
+        "http://example.com/path/to/page",
+        "http://example.com/path/to/page.html",
+        "http://example.com/path/to/page.html#title",
+        "http://example.com/path/to/page.html#title%20here",
+        "http://example.com/path/to/page.html#title%20here",
+        "http://example.com/path/to/page?foo=bar&bar=baz",
+        "http://example.com/path/to/page.html?foo=bar&bar=baz",
+        "http://example.com/path/to/page.html#title?foo=bar&bar=baz",
+        "http://user:password@example.com/",
+        "http://www.example.com/",
+        "http://www.www.example.com/",
+        "http://www.www.www.example.com/",
+        "https://example.com",
+        "https://www.example.com/",
+    ]
+    invalid = [
+        "hppt://example.com/",
+        "sftp://example.com/",
+        "http:/example.com/",
+        "http://www example com/",
+        "http://www\texample\tcom/",
+    ]
+
+    for test in valid:
+        assert allMatches(regEx, f"Text {test} more text") == [[(test, 5, 5 + len(test))]]
+
+    for test in invalid:
+        assert allMatches(regEx, f"Text {test} more text") == []
+
+
+@pytest.mark.core
+def testTextPatterns_Words():
+    """Test the word split regex."""
+    regEx = REGEX_PATTERNS.wordSplit
+
+    # Spaces
+    assert allMatches(regEx, "one two three") == [
+        [("one", 0, 3)], [("two", 4, 7)], [("three", 8, 13)]
+    ]
+
+    # Hyphens
+    assert allMatches(regEx, "one-two-three") == [
+        [("one", 0, 3)], [("two", 4, 7)], [("three", 8, 13)]
+    ]
+
+    # Em Dashes
+    assert allMatches(regEx, "one\u2014two\u2014three") == [
+        [("one", 0, 3)], [("two", 4, 7)], [("three", 8, 13)]
+    ]
+
+    # Em Dashes
+    assert allMatches(regEx, "one\u2014two\u2014three") == [
+        [("one", 0, 3)], [("two", 4, 7)], [("three", 8, 13)]
+    ]
+
+    # Plus
+    assert allMatches(regEx, "one+two+three") == [
+        [("one", 0, 3)], [("two", 4, 7)], [("three", 8, 13)]
+    ]
+
+    # Slash
+    assert allMatches(regEx, "one/two/three") == [
+        [("one", 0, 3)], [("two", 4, 7)], [("three", 8, 13)]
+    ]
+
+    # Brackets
+    assert allMatches(regEx, "one[two]three") == [
+        [("one", 0, 3)], [("two", 4, 7)], [("three", 8, 13)]
+    ]
+
+    # Colon
+    assert allMatches(regEx, "one:two:three") == [
+        [("one", 0, 3)], [("two", 4, 7)], [("three", 8, 13)]
+    ]
 
 
 @pytest.mark.core
@@ -156,6 +242,19 @@ def testTextPatterns_ShortcodesPlain():
 
 
 @pytest.mark.core
+def testTextPatterns_LineBreakReplace():
+    """Test replacing forced line breaks."""
+    regEx = REGEX_PATTERNS.lineBreak
+
+    assert regEx.sub("\n", "one[br]two") == "one\ntwo"
+    assert regEx.sub("\n", "one[br]\ntwo") == "one\ntwo"
+    assert regEx.sub("\n", "one[br]\n\ntwo") == "one\n\ntwo"
+    assert regEx.sub("\n", "one[BR]two") == "one\ntwo"
+    assert regEx.sub("\n", "one[BR]\ntwo") == "one\ntwo"
+    assert regEx.sub("\n", "one[BR]\n\ntwo") == "one\n\ntwo"
+
+
+@pytest.mark.core
 def testTextPatterns_ShortcodesValue():
     """Test the shortcode with value pattern regexes."""
     regEx = REGEX_PATTERNS.shortcodeValue
@@ -168,6 +267,10 @@ def testTextPatterns_ShortcodesValue():
 @pytest.mark.core
 def testTextPatterns_DialogueStyle():
     """Test the dialogue style pattern regexes."""
+    # Before set, the regex is None
+    CONFIG.dialogStyle = 0
+    assert REGEX_PATTERNS.dialogStyle is None
+
     # Set the config
     CONFIG.fmtSQuoteOpen  = nwUnicode.U_LSQUO
     CONFIG.fmtSQuoteClose = nwUnicode.U_RSQUO
@@ -181,6 +284,7 @@ def testTextPatterns_DialogueStyle():
 
     CONFIG.allowOpenDial = False
     regEx = REGEX_PATTERNS.dialogStyle
+    assert regEx is not None
 
     # Defined single quotes are recognised
     assert allMatches(regEx, "one \u2018two\u2019 three") == [
@@ -190,6 +294,16 @@ def testTextPatterns_DialogueStyle():
     # Defined double quotes are recognised
     assert allMatches(regEx, "one \u201ctwo\u201d three") == [
         [("\u201ctwo\u201d", 4, 9)]
+    ]
+
+    # Both single and double quotes are recognised
+    assert allMatches(regEx, "one \u2018two\u2019 three \u201cfour\u201d five") == [
+        [("\u2018two\u2019", 4, 9)], [("\u201cfour\u201d", 16, 22)]
+    ]
+
+    # But not mixed
+    assert allMatches(regEx, "one \u2018two\u201d three \u201cfour\u2019 five") == [
+        [("\u2018two\u201d three \u201cfour\u2019", 4, 22)]
     ]
 
     # Straight single quotes are ignored
@@ -206,6 +320,7 @@ def testTextPatterns_DialogueStyle():
 
     CONFIG.allowOpenDial = True
     regEx = REGEX_PATTERNS.dialogStyle
+    assert regEx is not None
 
     # Defined single quotes are recognised also when open
     assert allMatches(regEx, "one \u2018two three") == [
@@ -221,45 +336,19 @@ def testTextPatterns_DialogueStyle():
 @pytest.mark.core
 def testTextPatterns_DialogueSpecial():
     """Test the special dialogue style pattern regexes."""
-    # Set the config
-    CONFIG.fmtSQuoteOpen  = nwUnicode.U_LSQUO
-    CONFIG.fmtSQuoteClose = nwUnicode.U_RSQUO
-    CONFIG.fmtDQuoteOpen  = nwUnicode.U_LDQUO
-    CONFIG.fmtDQuoteClose = nwUnicode.U_RDQUO
+    # Before set, the regex is None
+    CONFIG.altDialogOpen = ""
+    CONFIG.altDialogClose = ""
+    assert REGEX_PATTERNS.altDialogStyle is None
 
-    CONFIG.dialogStyle = 3
-    CONFIG.dialogLine = nwUnicode.U_ENDASH
-    CONFIG.narratorBreak = nwUnicode.U_ENDASH
+    # Set the config
     CONFIG.altDialogOpen = "::"
     CONFIG.altDialogClose = "::"
-
-    # Dialogue Line
-    # =============
-    regEx = REGEX_PATTERNS.dialogLine
-
-    # Check dialogue line in first position
-    assert allMatches(regEx, "\u2013 one two three") == [
-        [("\u2013 one two three", 0, 15)]
-    ]
-
-    # Check dialogue line in second position
-    assert allMatches(regEx, " \u2013 one two three") == []
-
-    # Narrator Break
-    # ==============
-    regEx = REGEX_PATTERNS.narratorBreak
-
-    # Narrator break with no padding
-    assert allMatches(regEx, "one \u2013two\u2013 three") == [
-        [("\u2013two\u2013", 4, 9)]
-    ]
-
-    # Narrator break with padding
-    assert allMatches(regEx, "one \u2013 two \u2013 three") == []
 
     # Alternative Dialogue
     # ====================
     regEx = REGEX_PATTERNS.altDialogStyle
+    assert regEx is not None
 
     # With no padding
     assert allMatches(regEx, "one ::two:: three") == [
@@ -270,3 +359,166 @@ def testTextPatterns_DialogueSpecial():
     assert allMatches(regEx, "one :: two :: three") == [
         [(":: two ::", 4, 13)]
     ]
+
+
+@pytest.mark.core
+def testTextPatterns_DialogParserEnglish():
+    """Test the dialog parser with English settings."""
+    # Set the config
+    CONFIG.dialogStyle = 3
+    CONFIG.fmtSQuoteOpen  = nwUnicode.U_LSQUO
+    CONFIG.fmtSQuoteClose = nwUnicode.U_RSQUO
+    CONFIG.fmtDQuoteOpen  = nwUnicode.U_LDQUO
+    CONFIG.fmtDQuoteClose = nwUnicode.U_RDQUO
+
+    parser = DialogParser()
+    parser.initParser()
+    assert parser.enabled is True
+
+    # Positions:   0                 18
+    assert parser("“Simple dialogue.”") == [
+        (0, 18),
+    ]
+
+    # Positions:   0                 18
+    assert parser("“Simple dialogue,” argued John.") == [
+        (0, 18),
+    ]
+
+    # Positions:   0                 18            32                      56
+    assert parser("“Simple dialogue,” argued John, “is not always so easy.”") == [
+        (0, 18), (32, 56),
+    ]
+
+    # With Narrator breaks
+    CONFIG.dialogLine = ""
+    CONFIG.narratorBreak = nwUnicode.U_EMDASH
+    parser.initParser()
+
+    # Positions:   0                 18              34                      58
+    assert parser("“Simple dialogue, — argued John, — is not always so easy.”") == [
+        (0, 18), (34, 58),
+    ]
+
+    # Positions:   0                 18            32                      56
+    assert parser("“Simple dialogue, —argued John—, is not always so easy.”") == [
+        (0, 18), (32, 56),
+    ]
+
+    # Positions:   0                              31
+    assert parser("“Simple dialogue, —argued John”") == [
+        (0, 31),
+    ]
+
+
+@pytest.mark.core
+def testTextPatterns_DialogParserSpanish():
+    """Test the dialog parser with Spanish settings."""
+    # Set the config
+    CONFIG.dialogStyle = 3
+    CONFIG.fmtSQuoteOpen  = nwUnicode.U_LSAQUO
+    CONFIG.fmtSQuoteClose = nwUnicode.U_RSAQUO
+    CONFIG.fmtDQuoteOpen  = nwUnicode.U_LAQUO
+    CONFIG.fmtDQuoteClose = nwUnicode.U_RAQUO
+    CONFIG.dialogLine = nwUnicode.U_EMDASH + nwUnicode.U_RAQUO
+    CONFIG.narratorBreak = nwUnicode.U_EMDASH
+
+    parser = DialogParser()
+    parser.initParser()
+
+    # Positions:   0                 18                                  54              70
+    assert parser("—No te preocupes. —Cerró la puerta y salió corriendo—. Volveré pronto.") == [
+        (0, 18), (54, 70),
+    ]
+
+    # Positions:   0             14
+    assert parser("«Tengo hambre», pensó Pedro.") == [
+        (0, 14),
+    ]
+
+    # Positions:   0               16
+    assert parser("—Puedes hacerlo —le dije y pensé «pero te costará mucho trabajo».") == [
+        (0, 16),
+    ]
+
+
+@pytest.mark.core
+def testTextPatterns_DialogParserPortuguese():
+    """Test the dialog parser with Portuguese settings."""
+    # Set the config
+    CONFIG.dialogStyle = 0
+    CONFIG.fmtSQuoteOpen  = nwUnicode.U_LSAQUO
+    CONFIG.fmtSQuoteClose = nwUnicode.U_RSAQUO
+    CONFIG.fmtDQuoteOpen  = nwUnicode.U_LAQUO
+    CONFIG.fmtDQuoteClose = nwUnicode.U_RAQUO
+    CONFIG.dialogLine = nwUnicode.U_EMDASH
+    CONFIG.narratorBreak = nwUnicode.U_EMDASH
+
+    parser = DialogParser()
+    parser.initParser()
+
+    # Positions:   0                    21
+    assert parser("— Está ficando tarde.") == [
+        (0, 21),
+    ]
+
+    # Positions:   0           12
+    assert parser("— Ainda não — ela responde.") == [
+        (0, 12),
+    ]
+
+    # Positions:   0           12               29                  49
+    assert parser("— Tudo bem? — ele pergunta. — Você falou com ele?") == [
+        (0, 12), (29, 49),
+    ]
+
+    # Positions:   0           12               29                  49
+    assert parser("— Tudo bem? — ele pergunta —. Você falou com ele?") == [
+        (0, 12), (29, 49),
+    ]
+
+
+@pytest.mark.core
+def testTextPatterns_DialogParserPolish():
+    """Test the dialog parser with alternating Polish settings."""
+    # Set the config
+    CONFIG.dialogStyle = 0
+    CONFIG.fmtSQuoteOpen  = "'"
+    CONFIG.fmtSQuoteClose = "'"
+    CONFIG.fmtDQuoteOpen  = '"'
+    CONFIG.fmtDQuoteClose = '"'
+    CONFIG.dialogLine = ""
+    CONFIG.narratorBreak = ""
+    CONFIG.narratorDialog = nwUnicode.U_ENDASH
+
+    parser = DialogParser()
+    parser.initParser()
+
+    # This is what an example dialogue might look like using Polish punctuation rules
+    # See discussion #1976
+
+    assert parser(
+        "– Example statement – someone said. And he added: – Another example statement."
+    ) == [
+        (0, 20), (50, 78),
+    ]
+
+    assert parser(
+        "– Oh my! – It would be nice if only the statements were highlighted, without "
+        "any narration. In a paragraph where there is only a short statement and then "
+        "a lot happens, this would be especially justified."
+    ) == [
+        (0, 9),
+    ]
+
+    assert parser(
+        "There are also sometimes paragraphs that start with a narrative, and only then "
+        "someone shouts out the words: – Oooh! Look!"
+    ) == [
+        (109, 122),
+    ]
+
+    assert parser(
+        "And so on and so forth. However, \"text in quotation marks\" should not be "
+        "highlighted at all, and if so, it should be highlighted differently."
+    ) == []

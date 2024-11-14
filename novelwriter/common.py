@@ -29,6 +29,7 @@ import unicodedata
 import uuid
 import xml.etree.ElementTree as ET
 
+from collections.abc import Callable
 from configparser import ConfigParser
 from datetime import datetime
 from pathlib import Path
@@ -204,6 +205,14 @@ def checkIntTuple(value: int, valid: tuple | list | set, default: int) -> int:
     return default
 
 
+def firstFloat(*args: Any) -> float:
+    """Return the first value that is a float."""
+    for arg in args:
+        if isinstance(arg, float):
+            return arg
+    return 0.0
+
+
 ##
 #  Formatting Functions
 ##
@@ -277,6 +286,16 @@ def simplified(text: str) -> str:
     replace all occurrences of (multiple) whitespaces with a 0x20 space.
     """
     return " ".join(str(text).strip().split())
+
+
+def compact(text: str) -> str:
+    """Compact a string by removing spaces."""
+    return "".join(str(text).split())
+
+
+def uniqueCompact(text: str) -> str:
+    """Return a unique, compact and sorted string."""
+    return "".join(sorted(set(compact(text))))
 
 
 def elide(text: str, length: int) -> str:
@@ -396,6 +415,10 @@ def numberToRoman(value: int, toLower: bool = False) -> str:
     return roman.lower() if toLower else roman
 
 
+##
+#  Qt Helpers
+##
+
 def cssCol(col: QColor, alpha: int | None = None) -> str:
     """Convert a QColor object to an rgba entry to use in CSS."""
     return f"rgba({col.red()}, {col.green()}, {col.blue()}, {alpha or col.alpha()})"
@@ -409,6 +432,13 @@ def describeFont(font: QFont) -> str:
         styles = [v for v in info.styleName().split() if v not in family]
         return " ".join([f"{info.pointSize()} pt", family] + styles)
     return "Error"
+
+
+def qtLambda(func: Callable, *args: Any, **kwargs: Any) -> Callable:
+    """A replacement for Python lambdas that works for Qt slots."""
+    def wrapper(*a_: Any) -> None:
+        func(*args, **kwargs)
+    return wrapper
 
 
 ##
@@ -462,6 +492,10 @@ def jsonEncode(data: dict | list | tuple, n: int = 0, nmax: int = 0) -> str:
     return "".join(buffer)
 
 
+##
+#  XML Helpers
+##
+
 def xmlIndent(tree: ET.Element | ET.ElementTree) -> None:
     """A modified version of the XML indent function in the standard
     library. It behaves more closely to how the one from lxml does.
@@ -503,6 +537,45 @@ def xmlIndent(tree: ET.Element | ET.ElementTree) -> None:
     tree.tail = "\n"
 
     return
+
+
+def xmlElement(
+    tag: str,
+    text: str | int | float | bool | None = None,
+    *,
+    attrib: dict | None = None,
+    tail: str | None = None,
+) -> ET.Element:
+    """A custom implementation of Element with more arguments."""
+    xSub = ET.Element(tag, attrib=attrib or {})
+    if text is not None:
+        if isinstance(text, bool):
+            xSub.text = str(text).lower()
+        else:
+            xSub.text = str(text)
+    if tail is not None:
+        xSub.tail = tail
+    return xSub
+
+
+def xmlSubElem(
+    parent: ET.Element,
+    tag: str,
+    text: str | int | float | bool | None = None,
+    *,
+    attrib: dict | None = None,
+    tail: str | None = None,
+) -> ET.Element:
+    """A custom implementation of SubElement with more arguments."""
+    xSub = ET.SubElement(parent, tag, attrib=attrib or {})
+    if text is not None:
+        if isinstance(text, bool):
+            xSub.text = str(text).lower()
+        else:
+            xSub.text = str(text)
+    if tail is not None:
+        xSub.tail = tail
+    return xSub
 
 
 ##

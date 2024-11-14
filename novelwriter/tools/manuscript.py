@@ -29,7 +29,10 @@ from time import time
 from typing import TYPE_CHECKING
 
 from PyQt5.QtCore import Qt, QTimer, QUrl, pyqtSignal, pyqtSlot
-from PyQt5.QtGui import QCloseEvent, QColor, QCursor, QFont, QPalette, QResizeEvent, QTextDocument
+from PyQt5.QtGui import (
+    QCloseEvent, QColor, QCursor, QDesktopServices, QFont, QPalette,
+    QResizeEvent, QTextDocument
+)
 from PyQt5.QtPrintSupport import QPrinter, QPrintPreviewDialog
 from PyQt5.QtWidgets import (
     QAbstractItemView, QApplication, QFormLayout, QGridLayout, QHBoxLayout,
@@ -40,12 +43,14 @@ from PyQt5.QtWidgets import (
 
 from novelwriter import CONFIG, SHARED
 from novelwriter.common import fuzzyTime
+from novelwriter.constants import nwLabels, nwStats, trConst
 from novelwriter.core.buildsettings import BuildCollection, BuildSettings
 from novelwriter.core.docbuild import NWBuildDocument
-from novelwriter.core.tokenizer import HeadingFormatter
-from novelwriter.core.toqdoc import TextDocumentTheme, ToQTextDocument
 from novelwriter.extensions.modified import NIconToggleButton, NIconToolButton, NToolDialog
 from novelwriter.extensions.progressbars import NProgressCircle
+from novelwriter.extensions.switch import NSwitch
+from novelwriter.formats.tokenizer import HeadingFormatter
+from novelwriter.formats.toqdoc import ToQTextDocument
 from novelwriter.gui.theme import STYLES_FLAT_TABS, STYLES_MIN_TOOLBUTTON
 from novelwriter.tools.manusbuild import GuiManuscriptBuild
 from novelwriter.tools.manussettings import GuiBuildSettings
@@ -83,6 +88,7 @@ class GuiManuscript(NToolDialog):
         self.setMinimumWidth(CONFIG.pxInt(600))
         self.setMinimumHeight(CONFIG.pxInt(500))
 
+        iPx = SHARED.theme.baseIconHeight
         iSz = SHARED.theme.baseIconSize
         wWin = CONFIG.pxInt(900)
         hWin = CONFIG.pxInt(600)
@@ -112,6 +118,11 @@ class GuiManuscript(NToolDialog):
         self.tbDel.setStyleSheet(buttonStyle)
         self.tbDel.clicked.connect(self._deleteSelectedBuild)
 
+        self.tbCopy = NIconToolButton(self, iSz, "copy")
+        self.tbCopy.setToolTip(self.tr("Duplicate Selected Build"))
+        self.tbCopy.setStyleSheet(buttonStyle)
+        self.tbCopy.clicked.connect(self._copySelectedBuild)
+
         self.tbEdit = NIconToolButton(self, iSz, "edit")
         self.tbEdit.setToolTip(self.tr("Edit Selected Build"))
         self.tbEdit.setStyleSheet(buttonStyle)
@@ -124,6 +135,7 @@ class GuiManuscript(NToolDialog):
         self.listToolBox.addStretch(1)
         self.listToolBox.addWidget(self.tbAdd)
         self.listToolBox.addWidget(self.tbDel)
+        self.listToolBox.addWidget(self.tbCopy)
         self.listToolBox.addWidget(self.tbEdit)
         self.listToolBox.setSpacing(0)
 
@@ -181,15 +193,31 @@ class GuiManuscript(NToolDialog):
         self.processBox.addWidget(self.btnBuild,   1, 0)
         self.processBox.addWidget(self.btnClose,   1, 1)
 
+        # Preview Options
+        # ===============
+
+        self.swtNewPage = NSwitch(self, height=iPx)
+        self.swtNewPage.setChecked(pOptions.getBool("GuiManuscript", "showNewPage", True))
+        self.swtNewPage.clicked.connect(self._generatePreview)
+
+        self.lblNewPage = QLabel(self.tr("Show Page Breaks"), self)
+        self.lblNewPage.setBuddy(self.swtNewPage)
+
         # Assemble GUI
         # ============
 
         self.docPreview = _PreviewWidget(self)
         self.docStats = _StatsWidget(self)
 
+        self.docBar = QHBoxLayout()
+        self.docBar.addWidget(self.docStats, 1, QtAlignTop)
+        self.docBar.addWidget(self.lblNewPage, 0, QtAlignTop)
+        self.docBar.addWidget(self.swtNewPage, 0, QtAlignTop)
+        self.docBar.setContentsMargins(0, 0, 0, 0)
+
         self.docBox = QVBoxLayout()
         self.docBox.addWidget(self.docPreview, 1)
-        self.docBox.addWidget(self.docStats, 0)
+        self.docBox.addLayout(self.docBar, 0)
         self.docBox.setContentsMargins(0, 0, 0, 0)
 
         self.docWdiget = QWidget(self)
@@ -287,6 +315,17 @@ class GuiManuscript(NToolDialog):
             self._openSettingsDialog(build)
         return
 
+    @pyqtSlot()
+    def _copySelectedBuild(self) -> None:
+        """Copy the currently selected build settings entry."""
+        if build := self._getSelectedBuild():
+            new = BuildSettings.duplicate(build)
+            self._builds.setBuild(new)
+            self._updateBuildsList()
+            if item := self._buildMap.get(new.buildID):
+                item.setSelected(True)
+        return
+
     @pyqtSlot("QListWidgetItem*", "QListWidgetItem*")
     def _updateBuildDetails(self, current: QListWidgetItem, previous: QListWidgetItem) -> None:
         """Process change of build selection to update the details."""
@@ -323,6 +362,7 @@ class GuiManuscript(NToolDialog):
             return
 
         start = time()
+        showNewPage = self.swtNewPage.isChecked()
 
         # Make sure editor content is saved before we start
         SHARED.saveEditor()
@@ -330,22 +370,8 @@ class GuiManuscript(NToolDialog):
         docBuild = NWBuildDocument(SHARED.project, build)
         docBuild.queueAll()
 
-        theme = TextDocumentTheme()
-        theme.text      = QColor(0, 0, 0)
-        theme.highlight = QColor(255, 255, 166)
-        theme.head      = QColor(66, 113, 174)
-        theme.comment   = QColor(100, 100, 100)
-        theme.note      = QColor(129, 55, 9)
-        theme.code      = QColor(66, 113, 174)
-        theme.modifier  = QColor(129, 55, 9)
-        theme.keyword   = QColor(245, 135, 31)
-        theme.tag       = QColor(66, 113, 174)
-        theme.optional  = QColor(66, 113, 174)
-        theme.dialog    = QColor(66, 113, 174)
-        theme.altdialog = QColor(129, 55, 9)
-
         self.docPreview.beginNewBuild(len(docBuild))
-        for step, _ in docBuild.iterBuildPreview(theme):
+        for step, _ in docBuild.iterBuildPreview(showNewPage):
             self.docPreview.buildStep(step + 1)
             QApplication.processEvents()
 
@@ -427,6 +453,7 @@ class GuiManuscript(NToolDialog):
         detailsHeight = CONFIG.rpxInt(buildSplit[1])
         detailsWidth = CONFIG.rpxInt(self.buildDetails.getColumnWidth())
         detailsExpanded = self.buildDetails.getExpandedState()
+        showNewPage = self.swtNewPage.isChecked()
 
         logger.debug("Saving State: GuiManuscript")
         pOptions = SHARED.project.options
@@ -438,6 +465,7 @@ class GuiManuscript(NToolDialog):
         pOptions.setValue("GuiManuscript", "detailsHeight", detailsHeight)
         pOptions.setValue("GuiManuscript", "detailsWidth", detailsWidth)
         pOptions.setValue("GuiManuscript", "detailsExpanded", detailsExpanded)
+        pOptions.setValue("GuiManuscript", "showNewPage", showNewPage)
         pOptions.saveSettings()
 
         return
@@ -470,9 +498,8 @@ class GuiManuscript(NToolDialog):
 
     def _updateBuildItem(self, build: BuildSettings) -> None:
         """Update the entry of a specific build item."""
-        bItem = self._buildMap.get(build.buildID, None)
-        if isinstance(bItem, QListWidgetItem):
-            bItem.setText(build.name)
+        if item := self._buildMap.get(build.buildID):
+            item.setText(build.name)
         else:  # Probably a new item
             self._updateBuildsList()
         return
@@ -593,7 +620,7 @@ class _DetailsWidget(QWidget):
         item.setText(1, "")
         self.listView.addTopLevelItem(item)
         for hFormat, hHide in [
-            ("headings.fmtTitle", "headings.hideTitle"),
+            ("headings.fmtPart", "headings.hidePart"),
             ("headings.fmtChapter", "headings.hideChapter"),
             ("headings.fmtUnnumbered", "headings.hideUnnumbered"),
             ("headings.fmtScene", "headings.hideScene"),
@@ -725,6 +752,7 @@ class _PreviewWidget(QTextBrowser):
         self.setMinimumWidth(40*SHARED.theme.textNWidth)
         self.setTabStopDistance(CONFIG.getTabWidth())
         self.setOpenExternalLinks(False)
+        self.setOpenLinks(False)
 
         self.document().setDocumentMargin(CONFIG.getTextMargin())
         self.setPlaceholderText(self.tr(
@@ -732,6 +760,9 @@ class _PreviewWidget(QTextBrowser):
         ))
 
         self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOn)
+
+        # Signals
+        self.anchorClicked.connect(self._linkClicked)
 
         # Document Age
         aPalette = self.palette()
@@ -823,6 +854,7 @@ class _PreviewWidget(QTextBrowser):
 
         document.setDocumentMargin(CONFIG.getTextMargin())
         self.setDocument(document)
+        self.setTabStopDistance(CONFIG.getTabWidth())
 
         self._docTime = int(time())
         self._updateBuildAge()
@@ -867,6 +899,17 @@ class _PreviewWidget(QTextBrowser):
     ##
     #  Private Slots
     ##
+
+    @pyqtSlot("QUrl")
+    def _linkClicked(self, url: QUrl) -> None:
+        """Process a clicked link in the document."""
+        if link := url.url():
+            logger.debug("Clicked link: '%s'", link)
+            if link.startswith("#"):
+                self.navigateTo(link.lstrip("#"))
+            elif link.startswith("http"):
+                QDesktopServices.openUrl(QUrl(url))
+        return
 
     @pyqtSlot()
     def _updateBuildAge(self) -> None:
@@ -923,8 +966,7 @@ class _StatsWidget(QWidget):
         self.toggleButton = NIconToggleButton(self, SHARED.theme.baseIconSize, "unfold")
         self.toggleButton.toggled.connect(self._toggleView)
 
-        self._buildMinimal()
-        self._buildMaximal()
+        self._buildBottomPanel()
 
         self.mainStack = QStackedWidget(self)
         self.mainStack.addWidget(self.minWidget)
@@ -944,23 +986,23 @@ class _StatsWidget(QWidget):
     def updateStats(self, data: dict[str, int]) -> None:
         """Update the stats values from a Tokenizer stats dict."""
         # Minimal
-        self.minWordCount.setText("{0:n}".format(data.get("allWords", 0)))
-        self.minCharCount.setText("{0:n}".format(data.get("allChars", 0)))
+        self.minWordCount.setText("{0:n}".format(data.get(nwStats.WORDS_ALL, 0)))
+        self.minCharCount.setText("{0:n}".format(data.get(nwStats.CHARS_ALL, 0)))
 
         # Maximal
-        self.maxTotalWords.setText("{0:n}".format(data.get("allWords", 0)))
-        self.maxHeadWords.setText("{0:n}".format(data.get("titleWords", 0)))
-        self.maxTextWords.setText("{0:n}".format(data.get("textWords", 0)))
-        self.maxTitleCount.setText("{0:n}".format(data.get("titleCount", 0)))
-        self.maxParCount.setText("{0:n}".format(data.get("paragraphCount", 0)))
+        self.maxTotalWords.setText("{0:n}".format(data.get(nwStats.WORDS_ALL, 0)))
+        self.maxHeadWords.setText("{0:n}".format(data.get(nwStats.WORDS_TITLE, 0)))
+        self.maxTextWords.setText("{0:n}".format(data.get(nwStats.WORDS_TEXT, 0)))
+        self.maxTitleCount.setText("{0:n}".format(data.get(nwStats.TITLES, 0)))
+        self.maxParCount.setText("{0:n}".format(data.get(nwStats.PARAGRAPHS, 0)))
 
-        self.maxTotalChars.setText("{0:n}".format(data.get("allChars", 0)))
-        self.maxHeaderChars.setText("{0:n}".format(data.get("titleChars", 0)))
-        self.maxTextChars.setText("{0:n}".format(data.get("textChars", 0)))
+        self.maxTotalChars.setText("{0:n}".format(data.get(nwStats.CHARS_ALL, 0)))
+        self.maxHeaderChars.setText("{0:n}".format(data.get(nwStats.CHARS_TITLE, 0)))
+        self.maxTextChars.setText("{0:n}".format(data.get(nwStats.CHARS_TEXT, 0)))
 
-        self.maxTotalWordChars.setText("{0:n}".format(data.get("allWordChars", 0)))
-        self.maxHeadWordChars.setText("{0:n}".format(data.get("titleWordChars", 0)))
-        self.maxTextWordChars.setText("{0:n}".format(data.get("textWordChars", 0)))
+        self.maxTotalWordChars.setText("{0:n}".format(data.get(nwStats.WCHARS_ALL, 0)))
+        self.maxHeadWordChars.setText("{0:n}".format(data.get(nwStats.WCHARS_TITLE, 0)))
+        self.maxTextWordChars.setText("{0:n}".format(data.get(nwStats.WCHARS_TEXT, 0)))
 
         return
 
@@ -989,37 +1031,29 @@ class _StatsWidget(QWidget):
     #  Internal Functions
     ##
 
-    def _buildMinimal(self) -> None:
-        """Build the minimal stats page."""
+    def _buildBottomPanel(self) -> None:
+        """Build the bottom page."""
         mPx = CONFIG.pxInt(8)
-
-        self.lblWordCount = QLabel(self.tr("Words"), self)
-        self.minWordCount = QLabel(self)
-
-        self.lblCharCount = QLabel(self.tr("Characters"), self)
-        self.minCharCount = QLabel(self)
-
-        # Assemble
-        self.minLayout = QHBoxLayout()
-        self.minLayout.addWidget(self.lblWordCount)
-        self.minLayout.addWidget(self.minWordCount)
-        self.minLayout.addSpacing(mPx)
-        self.minLayout.addWidget(self.lblCharCount)
-        self.minLayout.addWidget(self.minCharCount)
-        self.minLayout.addStretch(1)
-        self.minLayout.setSpacing(mPx)
-        self.minLayout.setContentsMargins(0, 0, 0, 0)
-
-        self.minWidget.setLayout(self.minLayout)
-
-        return
-
-    def _buildMaximal(self) -> None:
-        """Build the maximal stats page."""
         hPx = CONFIG.pxInt(12)
         vPx = CONFIG.pxInt(4)
 
-        # Left Column
+        trAllChars = trConst(nwLabels.STATS_NAME[nwStats.CHARS_ALL])
+        trTextChars = trConst(nwLabels.STATS_NAME[nwStats.CHARS_TEXT])
+        trTitleChars = trConst(nwLabels.STATS_NAME[nwStats.CHARS_TITLE])
+        trParagraphCount = trConst(nwLabels.STATS_NAME[nwStats.PARAGRAPHS])
+        trTitleCount = trConst(nwLabels.STATS_NAME[nwStats.TITLES])
+        trAllWordChars = trConst(nwLabels.STATS_NAME[nwStats.WCHARS_ALL])
+        trTextWordChars = trConst(nwLabels.STATS_NAME[nwStats.WCHARS_TEXT])
+        trTitleWordChars = trConst(nwLabels.STATS_NAME[nwStats.WCHARS_TITLE])
+        trAllWords = trConst(nwLabels.STATS_NAME[nwStats.WORDS_ALL])
+        trTextWords = trConst(nwLabels.STATS_NAME[nwStats.WORDS_TEXT])
+        trTitleWords = trConst(nwLabels.STATS_NAME[nwStats.WORDS_TITLE])
+
+        # Minimal Form
+        self.minWordCount = QLabel(self)
+        self.minCharCount = QLabel(self)
+
+        # Maximal Form, Left Column
         self.maxTotalWords = QLabel(self)
         self.maxHeadWords = QLabel(self)
         self.maxTextWords = QLabel(self)
@@ -1033,20 +1067,19 @@ class _StatsWidget(QWidget):
         self.maxParCount.setAlignment(QtAlignRight)
 
         self.leftForm = QFormLayout()
-        self.leftForm.addRow(self.tr("Words"), self.maxTotalWords)
-        self.leftForm.addRow(self.tr("Words in Headings"), self.maxHeadWords)
-        self.leftForm.addRow(self.tr("Words in Text"), self.maxTextWords)
+        self.leftForm.addRow(trAllWords, self.maxTotalWords)
+        self.leftForm.addRow(trTitleWords, self.maxHeadWords)
+        self.leftForm.addRow(trTextWords, self.maxTextWords)
         self.leftForm.addRow("", QLabel(self))
-        self.leftForm.addRow(self.tr("Headings"), self.maxTitleCount)
-        self.leftForm.addRow(self.tr("Paragraphs"), self.maxParCount)
+        self.leftForm.addRow(trTitleCount, self.maxTitleCount)
+        self.leftForm.addRow(trParagraphCount, self.maxParCount)
         self.leftForm.setHorizontalSpacing(hPx)
         self.leftForm.setVerticalSpacing(vPx)
 
-        # Right Column
+        # Maximal Form, Right Column
         self.maxTotalChars = QLabel(self)
         self.maxHeaderChars = QLabel(self)
         self.maxTextChars = QLabel(self)
-
         self.maxTotalWordChars = QLabel(self)
         self.maxHeadWordChars = QLabel(self)
         self.maxTextWordChars = QLabel(self)
@@ -1054,22 +1087,31 @@ class _StatsWidget(QWidget):
         self.maxTotalChars.setAlignment(QtAlignRight)
         self.maxHeaderChars.setAlignment(QtAlignRight)
         self.maxTextChars.setAlignment(QtAlignRight)
-
         self.maxTotalWordChars.setAlignment(QtAlignRight)
         self.maxHeadWordChars.setAlignment(QtAlignRight)
         self.maxTextWordChars.setAlignment(QtAlignRight)
 
         self.rightForm = QFormLayout()
-        self.rightForm.addRow(self.tr("Characters"), self.maxTotalChars)
-        self.rightForm.addRow(self.tr("Characters in Headings"), self.maxHeaderChars)
-        self.rightForm.addRow(self.tr("Characters in Text"), self.maxTextChars)
-        self.rightForm.addRow(self.tr("Characters, No Spaces"), self.maxTotalWordChars)
-        self.rightForm.addRow(self.tr("Characters in Headings, No Spaces"), self.maxHeadWordChars)
-        self.rightForm.addRow(self.tr("Characters in Text, No Spaces"), self.maxTextWordChars)
+        self.rightForm.addRow(trAllChars, self.maxTotalChars)
+        self.rightForm.addRow(trTitleChars, self.maxHeaderChars)
+        self.rightForm.addRow(trTextChars, self.maxTextChars)
+        self.rightForm.addRow(trAllWordChars, self.maxTotalWordChars)
+        self.rightForm.addRow(trTitleWordChars, self.maxHeadWordChars)
+        self.rightForm.addRow(trTextWordChars, self.maxTextWordChars)
         self.rightForm.setHorizontalSpacing(hPx)
         self.rightForm.setVerticalSpacing(vPx)
 
         # Assemble
+        self.minLayout = QHBoxLayout()
+        self.minLayout.addWidget(QLabel(trAllWords, self))
+        self.minLayout.addWidget(self.minWordCount)
+        self.minLayout.addSpacing(mPx)
+        self.minLayout.addWidget(QLabel(trAllChars, self))
+        self.minLayout.addWidget(self.minCharCount)
+        self.minLayout.addStretch(1)
+        self.minLayout.setSpacing(mPx)
+        self.minLayout.setContentsMargins(0, 0, 0, 0)
+
         self.maxLayout = QHBoxLayout()
         self.maxLayout.addLayout(self.leftForm)
         self.maxLayout.addLayout(self.rightForm)
@@ -1077,6 +1119,7 @@ class _StatsWidget(QWidget):
         self.maxLayout.setSpacing(CONFIG.pxInt(32))
         self.maxLayout.setContentsMargins(0, 0, 0, 0)
 
+        self.minWidget.setLayout(self.minLayout)
         self.maxWidget.setLayout(self.maxLayout)
 
         return

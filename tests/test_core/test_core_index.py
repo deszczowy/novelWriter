@@ -224,13 +224,17 @@ def testCoreIndex_CheckThese(mockGUI, fncPath, mockRnd):
 
     nHandle = project.newFile("Hello", C.hNovelRoot)
     cHandle = project.newFile("Jane",  C.hCharRoot)
+    wHandle = project.newFile("Earth", C.hWorldRoot)
     assert isinstance(nHandle, str)
     assert isinstance(cHandle, str)
+    assert isinstance(wHandle, str)
 
     nItem = project.tree[nHandle]
     cItem = project.tree[cHandle]
+    wItem = project.tree[wHandle]
     assert isinstance(nItem, NWItem)
     assert isinstance(cItem, NWItem)
+    assert isinstance(wItem, NWItem)
 
     assert index.rootChangedSince(C.hNovelRoot, 0) is False
     assert index.rootChangedSince(None, 0) is False
@@ -242,25 +246,38 @@ def testCoreIndex_CheckThese(mockGUI, fncPath, mockRnd):
         "@tag:\n"
         "@:\n"
     ))
+    assert index.scanText(wHandle, (
+        "# Earth\n"
+        "@tag: Earth\n"
+    ))
     assert index.scanText(nHandle, (
         "# Hello World!\n"
         "@pov: Jane\n"
+        "@location: Earth\n"
         "@invalid: John\n"  # Checks for issue #688
     ))
+    assert index._tagsIndex.tagHandle("Earth") == wHandle
+    assert index._tagsIndex.tagHeading("Earth") == "T0001"
+    assert index._tagsIndex.tagClass("Earth") == "WORLD"
+
     assert index._tagsIndex.tagHandle("Jane") == cHandle
     assert index._tagsIndex.tagHeading("Jane") == "T0001"
     assert index._tagsIndex.tagClass("Jane") == "CHARACTER"
+
     assert index.getItemHeading(nHandle, "T0001").title == "Hello World!"  # type: ignore
     assert index.getReferences(nHandle, "T0001") == {
         "@char": [],
         "@custom": [],
         "@entity": [],
         "@focus": [],
-        "@location": [],
+        "@location": ["Earth"],
+        "@mention": [],
         "@object": [],
         "@plot": [],
         "@pov": ["Jane"],
-        "@time": []
+        "@story": [],
+        "@tag": [],
+        "@time": [],
     }
 
     assert index.rootChangedSince(C.hNovelRoot, 0) is True
@@ -283,13 +300,29 @@ def testCoreIndex_CheckThese(mockGUI, fncPath, mockRnd):
     assert index.checkThese(["@tag", "John"], nHandle) == [True, True]
     assert index.checkThese(["@pov", "John"], nHandle) == [True, False]
     assert index.checkThese(["@pov", "Jane"], nHandle) == [True, True]
+    assert index.checkThese(["@mention", "Jane"], nHandle) == [True, True]
     assert index.checkThese(["@ pov", "Jane"], nHandle) == [False, False]
     assert index.checkThese(["@what", "Jane"], nHandle) == [False, False]
+
+    # Two w/Class Check
+    assert index.checkThese(["@pov", "Earth"], nHandle) == [True, False]
+    assert index.checkThese(["@focus", "Earth"], nHandle) == [True, False]
+    assert index.checkThese(["@char", "Earth"], nHandle) == [True, False]
+    assert index.checkThese(["@plot", "Earth"], nHandle) == [True, False]
+    assert index.checkThese(["@time", "Earth"], nHandle) == [True, False]
+    assert index.checkThese(["@location", "Earth"], nHandle) == [True, True]
+    assert index.checkThese(["@object", "Earth"], nHandle) == [True, False]
+    assert index.checkThese(["@entity", "Earth"], nHandle) == [True, False]
+    assert index.checkThese(["@custom", "Earth"], nHandle) == [True, False]
+    assert index.checkThese(["@mention", "Earth"], nHandle) == [True, True]
 
     # Three Items
     assert index.checkThese(["@tag", "Jane", "John"], cHandle) == [True, True, False]
     assert index.checkThese(["@who", "Jane", "John"], cHandle) == [False, False, False]
     assert index.checkThese(["@pov", "Jane", "John"], nHandle) == [True, True, False]
+    assert index.checkThese(["@pov", "Jane", "Earth"], nHandle) == [True, True, False]
+    assert index.checkThese(["@mention", "Jane", "Earth"], nHandle) == [True, True, True]
+    assert index.checkThese(["@mention", "Jane", "Stuff"], nHandle) == [True, True, False]
 
     # Parse a Checked Value
     assert index.parseValue("Jane | Jane Smith") == ("Jane", "Jane Smith")
@@ -1457,5 +1490,6 @@ def testCoreIndex_processComment():
     # Padding with term
     assert processComment("%note.term: Hi") == (nwComment.NOTE, "term", "Hi", 6, 11)
     assert processComment("% note.term: Hi") == (nwComment.NOTE, "term", "Hi", 7, 12)
+    assert processComment("% note.term : Hi") == (nwComment.NOTE, "term", "Hi", 7, 13)
     assert processComment("% note. term : Hi") == (nwComment.PLAIN, "", "note. term : Hi", 0, 0)
     assert processComment("% note . term : Hi") == (nwComment.PLAIN, "", "note . term : Hi", 0, 0)

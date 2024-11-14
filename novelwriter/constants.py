@@ -60,11 +60,14 @@ class nwConst:
 
 class nwRegEx:
 
+    URL    = r"https?://(?:www\.|(?!www))[\w/()@:%_\+-.~#?&=]+"
+    WORDS  = r"\b[^\s\-\+\/–—\[\]:]+\b"
+    BREAK  = r"(?i)(?<!\\)(\[br\]\n?)"
     FMT_EI = r"(?<![\w\\])(_)(?![\s_])(.+?)(?<![\s\\])(\1)(?!\w)"
     FMT_EB = r"(?<![\w\\])(\*{2})(?![\s\*])(.+?)(?<![\s\\])(\1)(?!\w)"
     FMT_ST = r"(?<![\w\\])(~{2})(?![\s~])(.+?)(?<![\s\\])(\1)(?!\w)"
-    FMT_SC = r"(?i)(?<!\\)(\[[\/\!]?(?:b|i|s|u|m|sup|sub)\])"
-    FMT_SV = r"(?i)(?<!\\)(\[(?:footnote):)(.+?)(?<!\\)(\])"
+    FMT_SC = r"(?i)(?<!\\)(\[(?:b|/b|i|/i|s|/s|u|/u|m|/m|sup|/sup|sub|/sub|br)\])"
+    FMT_SV = r"(?i)(?<!\\)(\[(?:footnote|field):)(.+?)(?<!\\)(\])"
 
 
 class nwShortcode:
@@ -83,20 +86,48 @@ class nwShortcode:
     SUP_C    = "[/sup]"
     SUB_O    = "[sub]"
     SUB_C    = "[/sub]"
+    BREAK    = "[br]"
 
     FOOTNOTE_B = "[footnote:"
+    FIELD_B    = "[field:"
 
     COMMENT_STYLES = {
         nwComment.FOOTNOTE: "[footnote:{0}]",
         nwComment.COMMENT:  "[comment:{0}]",
     }
 
+    FIELD_VALUE = "[field:{0}]"
 
-class nwHeaders:
+
+class nwStyles:
 
     H_VALID = ("H0", "H1", "H2", "H3", "H4")
     H_LEVEL = {"H0": 0, "H1": 1, "H2": 2, "H3": 3, "H4": 4}
     H_SIZES = {0: 2.50, 1: 2.00, 2: 1.75, 3: 1.50, 4: 1.25}
+
+    T_NORMAL = 1.0
+    T_SMALL  = 0.8
+
+    T_LABEL = {
+        "H0": QT_TRANSLATE_NOOP("Constant", "Title"),
+        "H1": QT_TRANSLATE_NOOP("Constant", "Heading 1 (Partition)"),
+        "H2": QT_TRANSLATE_NOOP("Constant", "Heading 2 (Chapter)"),
+        "H3": QT_TRANSLATE_NOOP("Constant", "Heading 3 (Scene)"),
+        "H4": QT_TRANSLATE_NOOP("Constant", "Heading 4 (Section)"),
+        "TT": QT_TRANSLATE_NOOP("Constant", "Text Paragraph"),
+        "SP": QT_TRANSLATE_NOOP("Constant", "Scene Separator"),
+    }
+    T_MARGIN = {
+        "H0": (1.50, 0.60),  # Title margins (top, bottom)
+        "H1": (1.50, 0.60),  # Heading 1 margins (top, bottom)
+        "H2": (1.50, 0.60),  # Heading 2 margins (top, bottom)
+        "H3": (1.20, 0.60),  # Heading 3 margins (top, bottom)
+        "H4": (1.20, 0.60),  # Heading 4 margins (top, bottom)
+        "TT": (0.00, 0.60),  # Text margins (top, bottom)
+        "SP": (1.20, 1.20),  # Separator margins (top, bottom)
+        "MT": (0.00, 0.60),  # Meta margins (top, bottom)
+        "FT": (1.40, 0.40),  # Footnote margins (left, bottom)
+    }
 
 
 class nwFiles:
@@ -121,34 +152,40 @@ class nwFiles:
 
 class nwKeyWords:
 
-    TAG_KEY    = "@tag"
-    POV_KEY    = "@pov"
-    FOCUS_KEY  = "@focus"
-    CHAR_KEY   = "@char"
-    PLOT_KEY   = "@plot"
-    TIME_KEY   = "@time"
-    WORLD_KEY  = "@location"
-    OBJECT_KEY = "@object"
-    ENTITY_KEY = "@entity"
-    CUSTOM_KEY = "@custom"
+    TAG_KEY     = "@tag"
+    POV_KEY     = "@pov"
+    FOCUS_KEY   = "@focus"
+    CHAR_KEY    = "@char"
+    PLOT_KEY    = "@plot"
+    TIME_KEY    = "@time"
+    WORLD_KEY   = "@location"
+    OBJECT_KEY  = "@object"
+    ENTITY_KEY  = "@entity"
+    CUSTOM_KEY  = "@custom"
+    STORY_KEY   = "@story"
+    MENTION_KEY = "@mention"
+
+    # Note: The order here affects the order of menu entries
+    ALL_KEYS = [
+        TAG_KEY, POV_KEY, FOCUS_KEY, CHAR_KEY, PLOT_KEY, TIME_KEY, WORLD_KEY,
+        OBJECT_KEY, ENTITY_KEY, CUSTOM_KEY, STORY_KEY, MENTION_KEY,
+    ]
 
     # Set of Valid Keys
-    VALID_KEYS = {
-        TAG_KEY, POV_KEY, FOCUS_KEY, CHAR_KEY, PLOT_KEY, TIME_KEY,
-        WORLD_KEY, OBJECT_KEY, ENTITY_KEY, CUSTOM_KEY
-    }
+    VALID_KEYS = set(ALL_KEYS)
 
     # Map from Keys to Item Class
     KEY_CLASS = {
-        POV_KEY:    nwItemClass.CHARACTER,
-        FOCUS_KEY:  nwItemClass.CHARACTER,
-        CHAR_KEY:   nwItemClass.CHARACTER,
-        PLOT_KEY:   nwItemClass.PLOT,
-        TIME_KEY:   nwItemClass.TIMELINE,
-        WORLD_KEY:  nwItemClass.WORLD,
-        OBJECT_KEY: nwItemClass.OBJECT,
-        ENTITY_KEY: nwItemClass.ENTITY,
-        CUSTOM_KEY: nwItemClass.CUSTOM,
+        POV_KEY:     nwItemClass.CHARACTER,
+        FOCUS_KEY:   nwItemClass.CHARACTER,
+        CHAR_KEY:    nwItemClass.CHARACTER,
+        PLOT_KEY:    nwItemClass.PLOT,
+        TIME_KEY:    nwItemClass.TIMELINE,
+        WORLD_KEY:   nwItemClass.WORLD,
+        OBJECT_KEY:  nwItemClass.OBJECT,
+        ENTITY_KEY:  nwItemClass.ENTITY,
+        CUSTOM_KEY:  nwItemClass.CUSTOM,
+        STORY_KEY:   nwItemClass.NOVEL,
     }
 
 
@@ -162,6 +199,29 @@ class nwLists:
         nwItemClass.OBJECT,
         nwItemClass.ENTITY,
         nwItemClass.CUSTOM,
+    ]
+
+
+class nwStats:
+
+    CHARS_ALL    = "allChars"
+    CHARS_TEXT   = "textChars"
+    CHARS_TITLE  = "titleChars"
+    PARAGRAPHS   = "paragraphCount"
+    TITLES       = "titleCount"
+    WCHARS_ALL   = "allWordChars"
+    WCHARS_TEXT  = "textWordChars"
+    WCHARS_TITLE = "titleWordChars"
+    WORDS_ALL    = "allWords"
+    WORDS_TEXT   = "textWords"
+    WORDS_TITLE  = "titleWords"
+
+    # Note: The order here affects the order of menu entries
+    ALL_FIELDS = [
+        WORDS_ALL, WORDS_TEXT, WORDS_TITLE,
+        CHARS_ALL, CHARS_TEXT, CHARS_TITLE,
+        WCHARS_ALL, WCHARS_TEXT, WCHARS_TITLE,
+        PARAGRAPHS, TITLES,
     ]
 
 
@@ -212,53 +272,89 @@ class nwLabels:
         "note":     QT_TRANSLATE_NOOP("Constant", "Project Note"),
     }
     KEY_NAME = {
-        nwKeyWords.TAG_KEY:    QT_TRANSLATE_NOOP("Constant", "Tag"),
-        nwKeyWords.POV_KEY:    QT_TRANSLATE_NOOP("Constant", "Point of View"),
-        nwKeyWords.FOCUS_KEY:  QT_TRANSLATE_NOOP("Constant", "Focus"),
-        nwKeyWords.CHAR_KEY:   QT_TRANSLATE_NOOP("Constant", "Characters"),
-        nwKeyWords.PLOT_KEY:   QT_TRANSLATE_NOOP("Constant", "Plot"),
-        nwKeyWords.TIME_KEY:   QT_TRANSLATE_NOOP("Constant", "Timeline"),
-        nwKeyWords.WORLD_KEY:  QT_TRANSLATE_NOOP("Constant", "Locations"),
-        nwKeyWords.OBJECT_KEY: QT_TRANSLATE_NOOP("Constant", "Objects"),
-        nwKeyWords.ENTITY_KEY: QT_TRANSLATE_NOOP("Constant", "Entities"),
-        nwKeyWords.CUSTOM_KEY: QT_TRANSLATE_NOOP("Constant", "Custom"),
+        nwKeyWords.TAG_KEY:     QT_TRANSLATE_NOOP("Constant", "Tag"),
+        nwKeyWords.POV_KEY:     QT_TRANSLATE_NOOP("Constant", "Point of View"),
+        nwKeyWords.FOCUS_KEY:   QT_TRANSLATE_NOOP("Constant", "Focus"),
+        nwKeyWords.CHAR_KEY:    QT_TRANSLATE_NOOP("Constant", "Characters"),
+        nwKeyWords.PLOT_KEY:    QT_TRANSLATE_NOOP("Constant", "Plot"),
+        nwKeyWords.TIME_KEY:    QT_TRANSLATE_NOOP("Constant", "Timeline"),
+        nwKeyWords.WORLD_KEY:   QT_TRANSLATE_NOOP("Constant", "Locations"),
+        nwKeyWords.OBJECT_KEY:  QT_TRANSLATE_NOOP("Constant", "Objects"),
+        nwKeyWords.ENTITY_KEY:  QT_TRANSLATE_NOOP("Constant", "Entities"),
+        nwKeyWords.CUSTOM_KEY:  QT_TRANSLATE_NOOP("Constant", "Custom"),
+        nwKeyWords.STORY_KEY:   QT_TRANSLATE_NOOP("Constant", "Story"),
+        nwKeyWords.MENTION_KEY: QT_TRANSLATE_NOOP("Constant", "Mentions"),
+    }
+    KEY_SHORTCUT = {
+        nwKeyWords.TAG_KEY:     "Ctrl+K, G",
+        nwKeyWords.POV_KEY:     "Ctrl+K, V",
+        nwKeyWords.FOCUS_KEY:   "Ctrl+K, F",
+        nwKeyWords.CHAR_KEY:    "Ctrl+K, C",
+        nwKeyWords.PLOT_KEY:    "Ctrl+K, P",
+        nwKeyWords.TIME_KEY:    "Ctrl+K, T",
+        nwKeyWords.WORLD_KEY:   "Ctrl+K, L",
+        nwKeyWords.OBJECT_KEY:  "Ctrl+K, O",
+        nwKeyWords.ENTITY_KEY:  "Ctrl+K, E",
+        nwKeyWords.CUSTOM_KEY:  "Ctrl+K, X",
+        nwKeyWords.STORY_KEY:   "Ctrl+K, N",
+        nwKeyWords.MENTION_KEY: "Ctrl+K, M",
     }
     OUTLINE_COLS = {
-        nwOutline.TITLE:  QT_TRANSLATE_NOOP("Constant", "Title"),
-        nwOutline.LEVEL:  QT_TRANSLATE_NOOP("Constant", "Level"),
-        nwOutline.LABEL:  QT_TRANSLATE_NOOP("Constant", "Document"),
-        nwOutline.LINE:   QT_TRANSLATE_NOOP("Constant", "Line"),
-        nwOutline.CCOUNT: QT_TRANSLATE_NOOP("Constant", "Chars"),
-        nwOutline.WCOUNT: QT_TRANSLATE_NOOP("Constant", "Words"),
-        nwOutline.PCOUNT: QT_TRANSLATE_NOOP("Constant", "Pars"),
-        nwOutline.POV:    QT_TRANSLATE_NOOP("Constant", "POV"),
-        nwOutline.FOCUS:  QT_TRANSLATE_NOOP("Constant", "Focus"),
-        nwOutline.CHAR:   KEY_NAME[nwKeyWords.CHAR_KEY],
-        nwOutline.PLOT:   KEY_NAME[nwKeyWords.PLOT_KEY],
-        nwOutline.WORLD:  KEY_NAME[nwKeyWords.WORLD_KEY],
-        nwOutline.TIME:   KEY_NAME[nwKeyWords.TIME_KEY],
-        nwOutline.OBJECT: KEY_NAME[nwKeyWords.OBJECT_KEY],
-        nwOutline.ENTITY: KEY_NAME[nwKeyWords.ENTITY_KEY],
-        nwOutline.CUSTOM: KEY_NAME[nwKeyWords.CUSTOM_KEY],
-        nwOutline.SYNOP:  QT_TRANSLATE_NOOP("Constant", "Synopsis"),
+        nwOutline.TITLE:   QT_TRANSLATE_NOOP("Constant", "Title"),
+        nwOutline.LEVEL:   QT_TRANSLATE_NOOP("Constant", "Level"),
+        nwOutline.LABEL:   QT_TRANSLATE_NOOP("Constant", "Document"),
+        nwOutline.LINE:    QT_TRANSLATE_NOOP("Constant", "Line"),
+        nwOutline.STATUS:  QT_TRANSLATE_NOOP("Constant", "Status"),
+        nwOutline.CCOUNT:  QT_TRANSLATE_NOOP("Constant", "Chars"),
+        nwOutline.WCOUNT:  QT_TRANSLATE_NOOP("Constant", "Words"),
+        nwOutline.PCOUNT:  QT_TRANSLATE_NOOP("Constant", "Pars"),
+        nwOutline.POV:     QT_TRANSLATE_NOOP("Constant", "POV"),
+        nwOutline.FOCUS:   QT_TRANSLATE_NOOP("Constant", "Focus"),
+        nwOutline.CHAR:    KEY_NAME[nwKeyWords.CHAR_KEY],
+        nwOutline.PLOT:    KEY_NAME[nwKeyWords.PLOT_KEY],
+        nwOutline.WORLD:   KEY_NAME[nwKeyWords.WORLD_KEY],
+        nwOutline.TIME:    KEY_NAME[nwKeyWords.TIME_KEY],
+        nwOutline.OBJECT:  KEY_NAME[nwKeyWords.OBJECT_KEY],
+        nwOutline.ENTITY:  KEY_NAME[nwKeyWords.ENTITY_KEY],
+        nwOutline.CUSTOM:  KEY_NAME[nwKeyWords.CUSTOM_KEY],
+        nwOutline.STORY:   KEY_NAME[nwKeyWords.STORY_KEY],
+        nwOutline.MENTION: KEY_NAME[nwKeyWords.MENTION_KEY],
+        nwOutline.SYNOP:   QT_TRANSLATE_NOOP("Constant", "Synopsis"),
+    }
+    STATS_NAME = {
+        nwStats.CHARS_ALL:    QT_TRANSLATE_NOOP("Constant", "Characters"),
+        nwStats.CHARS_TEXT:   QT_TRANSLATE_NOOP("Constant", "Characters in Text"),
+        nwStats.CHARS_TITLE:  QT_TRANSLATE_NOOP("Constant", "Characters in Headings"),
+        nwStats.PARAGRAPHS:   QT_TRANSLATE_NOOP("Constant", "Paragraphs"),
+        nwStats.TITLES:       QT_TRANSLATE_NOOP("Constant", "Headings"),
+        nwStats.WCHARS_ALL:   QT_TRANSLATE_NOOP("Constant", "Characters, No Spaces"),
+        nwStats.WCHARS_TEXT:  QT_TRANSLATE_NOOP("Constant", "Characters in Text, No Spaces"),
+        nwStats.WCHARS_TITLE: QT_TRANSLATE_NOOP("Constant", "Characters in Headings, No Spaces"),
+        nwStats.WORDS_ALL:    QT_TRANSLATE_NOOP("Constant", "Words"),
+        nwStats.WORDS_TEXT:   QT_TRANSLATE_NOOP("Constant", "Words in Text"),
+        nwStats.WORDS_TITLE:  QT_TRANSLATE_NOOP("Constant", "Words in Headings"),
     }
     BUILD_FMT = {
         nwBuildFmt.ODT:    QT_TRANSLATE_NOOP("Constant", "Open Document (.odt)"),
         nwBuildFmt.FODT:   QT_TRANSLATE_NOOP("Constant", "Flat Open Document (.fodt)"),
-        nwBuildFmt.HTML:   QT_TRANSLATE_NOOP("Constant", "novelWriter HTML (.html)"),
+        nwBuildFmt.DOCX:   QT_TRANSLATE_NOOP("Constant", "Microsoft Word Document (.docx)"),
+        nwBuildFmt.HTML:   QT_TRANSLATE_NOOP("Constant", "HTML 5 (.html)"),
         nwBuildFmt.NWD:    QT_TRANSLATE_NOOP("Constant", "novelWriter Markup (.txt)"),
         nwBuildFmt.STD_MD: QT_TRANSLATE_NOOP("Constant", "Standard Markdown (.md)"),
         nwBuildFmt.EXT_MD: QT_TRANSLATE_NOOP("Constant", "Extended Markdown (.md)"),
-        nwBuildFmt.J_HTML: QT_TRANSLATE_NOOP("Constant", "JSON + novelWriter HTML (.json)"),
+        nwBuildFmt.PDF:    QT_TRANSLATE_NOOP("Constant", "Portable Document Format (.pdf)"),
+        nwBuildFmt.J_HTML: QT_TRANSLATE_NOOP("Constant", "JSON + HTML 5 (.json)"),
         nwBuildFmt.J_NWD:  QT_TRANSLATE_NOOP("Constant", "JSON + novelWriter Markup (.json)"),
     }
     BUILD_EXT = {
         nwBuildFmt.ODT:    ".odt",
         nwBuildFmt.FODT:   ".fodt",
+        nwBuildFmt.DOCX:   ".docx",
         nwBuildFmt.HTML:   ".html",
         nwBuildFmt.NWD:    ".txt",
         nwBuildFmt.STD_MD: ".md",
         nwBuildFmt.EXT_MD: ".md",
+        nwBuildFmt.PDF:    ".pdf",
         nwBuildFmt.J_HTML: ".json",
         nwBuildFmt.J_NWD:  ".json",
     }
@@ -343,11 +439,11 @@ class nwHeadFmt:
         CHAR_POV, CHAR_FOCUS
     ]
 
-    # ODT Document Page Header
-    ODT_PROJECT = "{Project}"
-    ODT_AUTHOR = "{Author}"
-    ODT_PAGE = "{Page}"
-    ODT_AUTO = "{Project} / {Author} / {Page}"
+    # Document Page Header
+    DOC_PROJECT = "{Project}"
+    DOC_AUTHOR = "{Author}"
+    DOC_PAGE = "{Page}"
+    DOC_AUTO = "{Project} / {Author} / {Page}"
 
 
 class nwQuotes:
@@ -448,6 +544,11 @@ class nwUnicode:
     U_DTRIS  = "\u25be"  # Down-pointing triangle, small
     U_LTRI   = "\u25c0"  # Left-pointing triangle
     U_LTRIS  = "\u25c2"  # Left-pointing triangle, small
+
+    # Special
+    U_UNKN   = "\ufffd"  # Unknown character
+    U_NAC1   = "\ufffe"  # Not a character
+    U_NAC2   = "\uffff"  # Not a character
 
     # HTML Equivalents
     # ================

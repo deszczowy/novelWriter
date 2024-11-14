@@ -28,6 +28,7 @@ from pathlib import Path
 
 import pytest
 
+from PyQt5.QtCore import QLocale
 from PyQt5.QtWidgets import QMessageBox
 
 sys.path.insert(1, str(Path(__file__).parent.parent.absolute()))
@@ -53,7 +54,10 @@ def resetConfigVars():
     CONFIG.setBackupPath(_TMP_ROOT)
     CONFIG.setGuiFont(None)
     CONFIG.setTextFont(None)
+    CONFIG.backupOnClose = False
     CONFIG._homePath = _TMP_ROOT
+    CONFIG._dLocale = QLocale("en_GB")
+    CONFIG.pdfDocs = _TMP_ROOT / "manual.pdf"
     CONFIG.guiLocale = "en_GB"
     return
 
@@ -70,6 +74,7 @@ def sessionFixture():
         shutil.rmtree(_TMP_ROOT)
     _TMP_ROOT.mkdir()
     _TMP_CONF.mkdir()
+    (_TMP_ROOT / "manual.pdf").touch()
     return
 
 
@@ -144,7 +149,7 @@ def projPath(fncPath):
 def mockGUI(qtbot, monkeypatch):
     """Create a mock instance of novelWriter's main GUI class."""
     monkeypatch.setattr(QMessageBox, "exec", lambda *a: None)
-    monkeypatch.setattr(QMessageBox, "result", lambda *a: QMessageBox.Yes)
+    monkeypatch.setattr(QMessageBox, "result", lambda *a: QMessageBox.StandardButton.Yes)
     gui = MockGuiMain()
     theme = MockTheme()
     monkeypatch.setattr(SHARED, "_gui", gui)
@@ -156,9 +161,10 @@ def mockGUI(qtbot, monkeypatch):
 def nwGUI(qtbot, monkeypatch, functionFixture):
     """Create an instance of the novelWriter GUI."""
     monkeypatch.setattr(QMessageBox, "exec", lambda *a: None)
-    monkeypatch.setattr(QMessageBox, "result", lambda *a: QMessageBox.Yes)
+    monkeypatch.setattr(QMessageBox, "result", lambda *a: QMessageBox.StandardButton.Yes)
 
     nwGUI = main(["--testmode", f"--config={_TMP_CONF}", f"--data={_TMP_CONF}"])
+    assert nwGUI is not None
     qtbot.addWidget(nwGUI)
     resetConfigVars()
     nwGUI.docEditor.initEditor()

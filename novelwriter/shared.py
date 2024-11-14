@@ -30,8 +30,8 @@ from pathlib import Path
 from time import time
 from typing import TYPE_CHECKING, TypeVar
 
-from PyQt5.QtCore import QObject, QRunnable, QThreadPool, QTimer, pyqtSignal
-from PyQt5.QtGui import QFont
+from PyQt5.QtCore import QObject, QRunnable, QThreadPool, QTimer, QUrl, pyqtSignal, pyqtSlot
+from PyQt5.QtGui import QDesktopServices, QFont
 from PyQt5.QtWidgets import QFileDialog, QFontDialog, QMessageBox, QWidget
 
 from novelwriter.common import formatFileFilter
@@ -64,6 +64,7 @@ class SharedData(QObject):
     indexCleared = pyqtSignal()
     indexAvailable = pyqtSignal()
     mainClockTick = pyqtSignal()
+    statusLabelsChanged = pyqtSignal(str)
 
     def __init__(self) -> None:
         super().__init__()
@@ -292,6 +293,16 @@ class SharedData(QObject):
         return None
 
     ##
+    #  Public Slots
+    ##
+
+    @pyqtSlot(str)
+    def openWebsite(self, url: str) -> None:
+        """Open a URL in the system's default browser."""
+        QDesktopServices.openUrl(QUrl(url))
+        return
+
+    ##
     #  Signal Proxy
     ##
 
@@ -307,6 +318,14 @@ class SharedData(QObject):
             self.indexCleared.emit()
         elif event == "buildIndex":
             self.indexAvailable.emit()
+        return
+
+    def projectSingalProxy(self, data: dict) -> None:
+        """Emit signals on project data change."""
+        event = data.get("event")
+        logger.debug("Received '%s' event from project data", event)
+        if event == "statusLabels":
+            self.statusLabelsChanged.emit(data.get("kind", ""))
         return
 
     ##
@@ -432,9 +451,9 @@ class _GuiAlert(QMessageBox):
         Yes/No buttons or just an Ok button.
         """
         if isYesNo:
-            self.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+            self.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
         else:
-            self.setStandardButtons(QMessageBox.Ok)
+            self.setStandardButtons(QMessageBox.StandardButton.Ok)
         pSz = 2*self._theme.baseIconHeight
         if level == self.INFO:
             self.setIconPixmap(self._theme.getPixmap("alert_info", (pSz, pSz)))

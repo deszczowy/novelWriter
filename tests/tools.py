@@ -21,6 +21,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 from __future__ import annotations
 
 import shutil
+import xml.etree.ElementTree as ET
 
 from datetime import datetime
 from pathlib import Path
@@ -30,6 +31,7 @@ from PyQt5.QtWidgets import QDialog, QVBoxLayout, QWidget
 XML_IGNORE = ("<novelWriterXML", "<project")
 ODT_IGNORE = ("<meta:generator", "<meta:creation-date", "<dc:date", "<meta:editing")
 NWD_IGNORE = ("%%~date:",)
+DOCX_IGNORE = ("<dcterms:created", "<dcterms:modified", "<ns0:Application")
 MOCK_TIME = datetime(2019, 5, 10, 18, 52, 0).timestamp()
 
 
@@ -59,7 +61,8 @@ class C:
 
 
 def cmpFiles(
-    fileOne: str | Path, fileTwo: str | Path,
+    fileOne: str | Path,
+    fileTwo: str | Path,
     ignoreLines: list | None = None,
     ignoreStart: tuple | None = None
 ) -> bool:
@@ -106,6 +109,15 @@ def cmpFiles(
             diffFound = True
 
     return not diffFound
+
+
+def xmlToText(xElem):
+    """Get the text content of an XML element."""
+    text = ET.tostring(xElem, encoding="utf-8", xml_declaration=False).decode()
+    bits = text.partition(">")
+    node = bits[0].partition(" ")
+    rest = " ".join(x for x in node[2].split() if not x.startswith("xmlns")).replace("/", " /")
+    return f"{node[0]}{rest}{bits[1]}{bits[2]}"
 
 
 def readFile(fileName: str | Path):
@@ -197,7 +209,7 @@ def buildTestProject(obj: object, projPath: Path) -> None:
     project._valid = True
 
     if nwGUI is not None:
-        nwGUI.rebuildTrees()
+        nwGUI.projView.populateTree()
 
     return
 

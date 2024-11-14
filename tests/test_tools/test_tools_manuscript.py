@@ -22,9 +22,12 @@ from __future__ import annotations
 
 import sys
 
+from unittest.mock import MagicMock
+
 import pytest
 
-from PyQt5.QtCore import pyqtSlot
+from PyQt5.QtCore import QUrl, pyqtSlot
+from PyQt5.QtGui import QDesktopServices
 from PyQt5.QtPrintSupport import QPrintPreviewDialog
 from PyQt5.QtWidgets import QAction, QListWidgetItem
 
@@ -45,9 +48,9 @@ def testToolManuscript_Init(monkeypatch, qtbot, nwGUI, projPath, mockRnd):
     buildTestProject(nwGUI, projPath)
     nwGUI.openProject(projPath)
     SHARED.project.storage.getDocument(C.hChapterDoc).writeDocument("## A Chapter\n\n\t\tHi")
-    allText = "New Novel\nBy Jane Doe\nA Chapter\n\t\tHi"
+    allText = "New Novel\nBy Jane Doe\n\nNew Page\nA Chapter\n\t\tHi"
 
-    nwGUI.mainMenu.aBuildManuscript.activate(QAction.Trigger)
+    nwGUI.mainMenu.aBuildManuscript.activate(QAction.ActionEvent.Trigger)
     qtbot.waitUntil(lambda: SHARED.findTopLevelWidget(GuiManuscript) is not None, timeout=1000)
     manus = SHARED.findTopLevelWidget(GuiManuscript)
     assert isinstance(manus, GuiManuscript)
@@ -134,6 +137,15 @@ def testToolManuscript_Builds(qtbot, nwGUI, projPath):
     assert isinstance(build, BuildSettings)
     assert build.name == "Test Build"
     assert manus.buildList.count() == 1
+
+    # Copy the build
+    manus._buildMap[build.buildID].setSelected(True)
+    manus._copySelectedBuild()
+    assert manus.buildList.count() == 2
+
+    new = manus._getSelectedBuild()
+    assert new is not None
+    assert new.name == "Test Build 2"
 
     # Close the dialog should also close the child dialogs
     manus.btnClose.click()
@@ -225,12 +237,25 @@ def testToolManuscript_Features(monkeypatch, qtbot, nwGUI, projPath, mockRnd):
     assert (item := listView.topLevelItem(3)) and item.data(0, keyRole) == "000000000000c:T0006"
     assert (item := listView.topLevelItem(4)) and item.data(0, keyRole) == "000000000000e:T0001"
 
-    # Click Outline
+    # Click outline
     item = listView.topLevelItem(4)
     assert item is not None
     with qtbot.waitSignal(manus.buildOutline.outlineEntryClicked) as signal:
         manus.buildOutline._onItemClick(item)
         assert signal.args == ["000000000000e:T0001"]
+
+    # Preview Navigation
+    assert manus.docPreview.source() == QUrl("#000000000000e:T0001")
+    manus.docPreview.navigateTo("000000000000c:T0002")
+    assert manus.docPreview.source() == QUrl("#000000000000c:T0002")
+    manus.docPreview._linkClicked(QUrl("#000000000000c:T0003"))
+    assert manus.docPreview.source() == QUrl("#000000000000c:T0003")
+    with monkeypatch.context() as mp:
+        openUrl = MagicMock()
+        mp.setattr(QDesktopServices, "openUrl", openUrl)
+        manus.docPreview._linkClicked(QUrl("http://www.example.com"))
+        assert openUrl.called is True
+        assert openUrl.call_args[0][0] == QUrl("http://www.example.com")
 
     # Check Preview Stats
     assert manus.docStats.mainStack.currentWidget() == manus.docStats.minWidget

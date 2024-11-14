@@ -35,13 +35,15 @@ from novelwriter.constants import nwLabels
 from novelwriter.core.buildsettings import BuildSettings
 from novelwriter.core.item import NWItem
 from novelwriter.core.project import NWProject
-from novelwriter.core.tohtml import ToHtml
-from novelwriter.core.tokenizer import Tokenizer
-from novelwriter.core.tomarkdown import ToMarkdown
-from novelwriter.core.toodt import ToOdt
-from novelwriter.core.toqdoc import TextDocumentTheme, ToQTextDocument
 from novelwriter.enum import nwBuildFmt
 from novelwriter.error import formatException, logException
+from novelwriter.formats.todocx import ToDocX
+from novelwriter.formats.tohtml import ToHtml
+from novelwriter.formats.tokenizer import Tokenizer
+from novelwriter.formats.tomarkdown import ToMarkdown
+from novelwriter.formats.toodt import ToOdt
+from novelwriter.formats.toqdoc import ToQTextDocument
+from novelwriter.formats.toraw import ToRaw
 
 logger = logging.getLogger(__name__)
 
@@ -86,20 +88,6 @@ class NWBuildDocument:
         return self._cache
 
     ##
-    #  Setters
-    ##
-
-    def setCountEnabled(self, state: bool) -> None:
-        """Turn on/off stats for builds."""
-        self._count = state
-        return
-
-    def setBuildOutline(self, state: bool) -> None:
-        """Turn on/off outline for builds."""
-        self._outline = state
-        return
-
-    ##
     #  Special Methods
     ##
 
@@ -125,165 +113,86 @@ class NWBuildDocument:
                 self._queue.append(item.itemHandle)
         return
 
-    def iterBuildPreview(self, theme: TextDocumentTheme) -> Iterable[tuple[int, bool]]:
+    def iterBuildPreview(self, newPage: bool) -> Iterable[tuple[int, bool]]:
         """Build a preview QTextDocument."""
         makeObj = ToQTextDocument(self._project)
         filtered = self._setupBuild(makeObj)
-
-        self._outline = True
-        self._count = True
-
-        font = QFont()
-        font.fromString(self._build.getStr("format.textFont"))
-
-        makeObj.initDocument(font, theme)
-        for i, tHandle in enumerate(self._queue):
-            self._error = None
-            if filtered.get(tHandle, (False, 0))[0]:
-                yield i, self._doBuild(makeObj, tHandle)
-            else:
-                yield i, False
-
-        makeObj.appendFootnotes()
-
-        self._error = None
-        self._cache = makeObj
-
-        return
-
-    def iterBuild(self, path: Path, bFormat: nwBuildFmt) -> Iterable[tuple[int, bool]]:
-        """Wrapper for builders based on format."""
-        if bFormat in (nwBuildFmt.ODT, nwBuildFmt.FODT):
-            yield from self.iterBuildOpenDocument(path, bFormat == nwBuildFmt.FODT)
-        elif bFormat in (nwBuildFmt.HTML, nwBuildFmt.J_HTML):
-            yield from self.iterBuildHTML(path, asJson=bFormat == nwBuildFmt.J_HTML)
-        elif bFormat in (nwBuildFmt.STD_MD, nwBuildFmt.EXT_MD):
-            yield from self.iterBuildMarkdown(path, bFormat == nwBuildFmt.EXT_MD)
-        elif bFormat in (nwBuildFmt.NWD, nwBuildFmt.J_NWD):
-            yield from self.iterBuildNWD(path, asJson=bFormat == nwBuildFmt.J_NWD)
-        return
-
-    def iterBuildOpenDocument(self, path: Path, isFlat: bool) -> Iterable[tuple[int, bool]]:
-        """Build an Open Document file."""
-        makeObj = ToOdt(self._project, isFlat=isFlat)
-        filtered = self._setupBuild(makeObj)
         makeObj.initDocument()
-
-        for i, tHandle in enumerate(self._queue):
-            self._error = None
-            if filtered.get(tHandle, (False, 0))[0]:
-                yield i, self._doBuild(makeObj, tHandle)
-            else:
-                yield i, False
-
+        makeObj.setShowNewPage(newPage)
+        self._outline = True
+        yield from self._iterBuild(makeObj, filtered)
         makeObj.closeDocument()
+        self._error = None
+        self._cache = makeObj
+        return
+
+    def iterBuildDocument(self, path: Path, bFormat: nwBuildFmt) -> Iterable[tuple[int, bool]]:
+        """Wrapper for builders based on format."""
+        self._error = None
+        self._cache = None
+
+        if bFormat in (nwBuildFmt.J_HTML, nwBuildFmt.J_NWD):
+            # Ensure that JSON output has the correct extension
+            path = path.with_suffix(".json")
+
+        if bFormat in (nwBuildFmt.ODT, nwBuildFmt.FODT):
+            makeObj = ToOdt(self._project, bFormat == nwBuildFmt.FODT)
+            filtered = self._setupBuild(makeObj)
+            makeObj.initDocument()
+            yield from self._iterBuild(makeObj, filtered)
+            makeObj.closeDocument()
+
+        elif bFormat in (nwBuildFmt.HTML, nwBuildFmt.J_HTML):
+            makeObj = ToHtml(self._project)
+            filtered = self._setupBuild(makeObj)
+            makeObj.initDocument()
+            yield from self._iterBuild(makeObj, filtered)
+            makeObj.closeDocument()
+            if not self._build.getBool("html.preserveTabs"):
+                makeObj.replaceTabs()
+
+        elif bFormat in (nwBuildFmt.STD_MD, nwBuildFmt.EXT_MD):
+            makeObj = ToMarkdown(self._project, bFormat == nwBuildFmt.EXT_MD)
+            filtered = self._setupBuild(makeObj)
+            yield from self._iterBuild(makeObj, filtered)
+            makeObj.closeDocument()
+            if self._build.getBool("format.replaceTabs"):
+                makeObj.replaceTabs(nSpaces=4, spaceChar=" ")
+
+        elif bFormat in (nwBuildFmt.NWD, nwBuildFmt.J_NWD):
+            makeObj = ToRaw(self._project)
+            filtered = self._setupBuild(makeObj)
+            yield from self._iterBuild(makeObj, filtered)
+            makeObj.closeDocument()
+            if self._build.getBool("format.replaceTabs"):
+                makeObj.replaceTabs(nSpaces=4, spaceChar=" ")
+
+        elif bFormat == nwBuildFmt.DOCX:
+            makeObj = ToDocX(self._project)
+            filtered = self._setupBuild(makeObj)
+            makeObj.initDocument()
+            yield from self._iterBuild(makeObj, filtered)
+            makeObj.closeDocument()
+
+        elif bFormat == nwBuildFmt.PDF:
+            makeObj = ToQTextDocument(self._project)
+            filtered = self._setupBuild(makeObj)
+            makeObj.initDocument()
+            yield from self._iterBuild(makeObj, filtered)
+            makeObj.closeDocument()
+
+        else:
+            logger.error("Unsupported document format")
+            return
 
         self._error = None
         self._cache = makeObj
 
         try:
-            if isFlat:
-                makeObj.saveFlatXML(path)
-            else:
-                makeObj.saveOpenDocText(path)
+            makeObj.saveDocument(path)
         except Exception as exc:
             logException()
             self._error = formatException(exc)
-
-        return
-
-    def iterBuildHTML(self, path: Path | None, asJson: bool = False) -> Iterable[tuple[int, bool]]:
-        """Build an HTML file. If path is None, no file is saved. This
-        is used for generating build previews.
-        """
-        makeObj = ToHtml(self._project)
-        filtered = self._setupBuild(makeObj)
-
-        for i, tHandle in enumerate(self._queue):
-            self._error = None
-            if filtered.get(tHandle, (False, 0))[0]:
-                yield i, self._doBuild(makeObj, tHandle)
-            else:
-                yield i, False
-
-        makeObj.appendFootnotes()
-
-        if not self._build.getBool("html.preserveTabs"):
-            makeObj.replaceTabs()
-
-        self._error = None
-        self._cache = makeObj
-
-        if isinstance(path, Path):
-            try:
-                if asJson:
-                    makeObj.saveHtmlJson(path)
-                else:
-                    makeObj.saveHtml5(path)
-            except Exception as exc:
-                logException()
-                self._error = formatException(exc)
-
-        return
-
-    def iterBuildMarkdown(self, path: Path, extendedMd: bool) -> Iterable[tuple[int, bool]]:
-        """Build a Markdown file."""
-        makeObj = ToMarkdown(self._project)
-        filtered = self._setupBuild(makeObj)
-
-        makeObj.setExtendedMarkdown(extendedMd)
-        if self._build.getBool("format.replaceTabs"):
-            makeObj.replaceTabs(nSpaces=4, spaceChar=" ")
-
-        for i, tHandle in enumerate(self._queue):
-            self._error = None
-            if filtered.get(tHandle, (False, 0))[0]:
-                yield i, self._doBuild(makeObj, tHandle)
-            else:
-                yield i, False
-
-        makeObj.appendFootnotes()
-
-        self._error = None
-        self._cache = makeObj
-
-        try:
-            makeObj.saveMarkdown(path)
-        except Exception as exc:
-            logException()
-            self._error = formatException(exc)
-
-        return
-
-    def iterBuildNWD(self, path: Path | None, asJson: bool = False) -> Iterable[tuple[int, bool]]:
-        """Build a novelWriter Markdown file."""
-        makeObj = ToMarkdown(self._project)
-        filtered = self._setupBuild(makeObj)
-
-        makeObj.setKeepMarkdown(True)
-
-        for i, tHandle in enumerate(self._queue):
-            self._error = None
-            if filtered.get(tHandle, (False, 0))[0]:
-                yield i, self._doBuild(makeObj, tHandle, convert=False)
-            else:
-                yield i, False
-
-        if self._build.getBool("format.replaceTabs"):
-            makeObj.replaceTabs(nSpaces=4, spaceChar=" ")
-
-        self._error = None
-        self._cache = makeObj
-
-        if isinstance(path, Path):
-            try:
-                if asJson:
-                    makeObj.saveRawMarkdownJSON(path)
-                else:
-                    makeObj.saveRawMarkdown(path)
-            except Exception as exc:
-                logException()
-                self._error = formatException(exc)
 
         return
 
@@ -291,16 +200,29 @@ class NWBuildDocument:
     #  Internal Functions
     ##
 
+    def _iterBuild(self, makeObj: Tokenizer, filtered: dict) -> Iterable[tuple[int, bool]]:
+        """Iterate over buildable documents."""
+        self._count = True
+        for i, tHandle in enumerate(self._queue):
+            self._error = None
+            if filtered.get(tHandle, (False, 0))[0]:
+                yield i, self._doBuild(makeObj, tHandle)
+            else:
+                yield i, False
+        return
+
     def _setupBuild(self, bldObj: Tokenizer) -> dict:
         """Configure the build object."""
         # Get Settings
         textFont = QFont(CONFIG.textFont)
         textFont.fromString(self._build.getStr("format.textFont"))
-        bldObj.setFont(textFont)
 
-        bldObj.setTitleFormat(
-            self._build.getStr("headings.fmtTitle"),
-            self._build.getBool("headings.hideTitle")
+        bldObj.setFont(textFont)
+        bldObj.setLanguage(self._project.data.language)
+
+        bldObj.setPartitionFormat(
+            self._build.getStr("headings.fmtPart"),
+            self._build.getBool("headings.hidePart")
         )
         bldObj.setChapterFormat(
             self._build.getStr("headings.fmtChapter"),
@@ -326,6 +248,10 @@ class NWBuildDocument:
             self._build.getBool("headings.centerTitle"),
             self._build.getBool("headings.breakTitle")
         )
+        bldObj.setPartitionStyle(
+            self._build.getBool("headings.centerPart"),
+            self._build.getBool("headings.breakPart")
+        )
         bldObj.setChapterStyle(
             self._build.getBool("headings.centerChapter"),
             self._build.getBool("headings.breakChapter")
@@ -338,11 +264,45 @@ class NWBuildDocument:
         bldObj.setJustify(self._build.getBool("format.justifyText"))
         bldObj.setLineHeight(self._build.getFloat("format.lineHeight"))
         bldObj.setKeepLineBreaks(self._build.getBool("format.keepBreaks"))
-        bldObj.setDialogueHighlight(self._build.getBool("format.showDialogue"))
+        bldObj.setDialogHighlight(self._build.getBool("format.showDialogue"))
         bldObj.setFirstLineIndent(
             self._build.getBool("format.firstLineIndent"),
             self._build.getFloat("format.firstIndentWidth"),
             self._build.getBool("format.indentFirstPar"),
+        )
+        bldObj.setHeadingStyles(
+            self._build.getBool("doc.colorHeadings"),
+            self._build.getBool("doc.scaleHeadings"),
+            self._build.getBool("doc.boldHeadings"),
+        )
+
+        bldObj.setTitleMargins(
+            self._build.getFloat("format.titleMarginT"),
+            self._build.getFloat("format.titleMarginB"),
+        )
+        bldObj.setHead1Margins(
+            self._build.getFloat("format.h1MarginT"),
+            self._build.getFloat("format.h1MarginB"),
+        )
+        bldObj.setHead2Margins(
+            self._build.getFloat("format.h2MarginT"),
+            self._build.getFloat("format.h2MarginB"),
+        )
+        bldObj.setHead3Margins(
+            self._build.getFloat("format.h3MarginT"),
+            self._build.getFloat("format.h3MarginB"),
+        )
+        bldObj.setHead4Margins(
+            self._build.getFloat("format.h4MarginT"),
+            self._build.getFloat("format.h4MarginB"),
+        )
+        bldObj.setTextMargins(
+            self._build.getFloat("format.textMarginT"),
+            self._build.getFloat("format.textMarginB"),
+        )
+        bldObj.setSeparatorMargins(
+            self._build.getFloat("format.sepMarginT"),
+            self._build.getFloat("format.sepMarginB"),
         )
 
         bldObj.setBodyText(self._build.getBool("text.includeBodyText"))
@@ -355,13 +315,13 @@ class NWBuildDocument:
             bldObj.setStyles(self._build.getBool("html.addStyles"))
             bldObj.setReplaceUnicode(self._build.getBool("format.stripUnicode"))
 
-        if isinstance(bldObj, ToOdt):
-            bldObj.setColourHeaders(self._build.getBool("odt.addColours"))
-            bldObj.setLanguage(self._project.data.language)
+        if isinstance(bldObj, (ToOdt, ToDocX)):
             bldObj.setHeaderFormat(
-                self._build.getStr("odt.pageHeader"), self._build.getInt("odt.pageCountOffset")
+                self._build.getStr("doc.pageHeader"),
+                self._build.getInt("doc.pageCountOffset"),
             )
 
+        if isinstance(bldObj, (ToOdt, ToDocX, ToQTextDocument)):
             scale = nwLabels.UNIT_SCALE.get(self._build.getStr("format.pageUnit"), 1.0)
             pW, pH = nwLabels.PAPER_SIZE.get(self._build.getStr("format.pageSize"), (-1.0, -1.0))
             bldObj.setPageLayout(
@@ -384,14 +344,17 @@ class NWBuildDocument:
         tItem = self._project.tree[tHandle]
         if isinstance(tItem, NWItem):
             try:
-                if tItem.isRootType() and not tItem.isNovelLike():
-                    bldObj.addRootHeading(tHandle)
-                    if convert:
-                        bldObj.doConvert()
-                    if self._count:
-                        bldObj.countStats()
-                    if self._outline:
-                        bldObj.buildOutline()
+                if tItem.isRootType():
+                    if tItem.isNovelLike():
+                        bldObj.setBreakNext()
+                    else:
+                        bldObj.addRootHeading(tHandle)
+                        if convert:
+                            bldObj.doConvert()
+                        if self._count:
+                            bldObj.countStats()
+                        if self._outline:
+                            bldObj.buildOutline()
                 elif tItem.isFileType():
                     bldObj.setText(tHandle)
                     bldObj.doPreProcessing()
@@ -402,8 +365,6 @@ class NWBuildDocument:
                         bldObj.buildOutline()
                     if convert:
                         bldObj.doConvert()
-                else:
-                    logger.info(f"Build: Skipping '{tHandle}'")
 
             except Exception:
                 self._error = f"Build: Failed to build '{tHandle}'"

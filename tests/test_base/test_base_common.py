@@ -32,12 +32,13 @@ from PyQt5.QtGui import QColor, QDesktopServices, QFontDatabase
 
 from novelwriter.common import (
     NWConfigParser, checkBool, checkFloat, checkInt, checkIntTuple, checkPath,
-    checkString, checkStringNone, checkUuid, cssCol, describeFont, elide,
-    formatFileFilter, formatInt, formatTime, formatTimeStamp, formatVersion,
-    fuzzyTime, getFileSize, hexToInt, isHandle, isItemClass, isItemLayout,
-    isItemType, isListInstance, isTitleTag, jsonEncode, makeFileNameSafe,
-    minmax, numberToRoman, openExternalPath, readTextFile, simplified,
-    transferCase, xmlIndent, yesNo
+    checkString, checkStringNone, checkUuid, compact, cssCol, describeFont,
+    elide, firstFloat, formatFileFilter, formatInt, formatTime,
+    formatTimeStamp, formatVersion, fuzzyTime, getFileSize, hexToInt, isHandle,
+    isItemClass, isItemLayout, isItemType, isListInstance, isTitleTag,
+    jsonEncode, makeFileNameSafe, minmax, numberToRoman, openExternalPath,
+    readTextFile, simplified, transferCase, uniqueCompact, xmlElement,
+    xmlIndent, xmlSubElem, yesNo
 )
 
 from tests.mocked import causeOSError
@@ -292,6 +293,15 @@ def testBaseCommon_checkIntTuple():
 
 
 @pytest.mark.base
+def testBaseCommon_firstFloat():
+    """Test the firstFloat function."""
+    assert firstFloat(None, 1.0) == 1.0
+    assert firstFloat(1.0, None) == 1.0
+    assert firstFloat(None, 1) == 0.0
+    assert firstFloat(None, "1.0") == 0.0
+
+
+@pytest.mark.base
 def testBaseCommon_formatTimeStamp():
     """Test the formatTimeStamp function."""
     tTime = time.mktime(time.gmtime(0))
@@ -344,6 +354,27 @@ def testBaseCommon_simplified():
     assert simplified("Hello World") == "Hello World"
     assert simplified("  Hello    World   ") == "Hello World"
     assert simplified("\tHello\n\r\tWorld") == "Hello World"
+
+
+@pytest.mark.base
+def testBaseCommon_compact():
+    """Test the compact function."""
+    assert compact("! ! !") == "!!!"
+    assert compact("1\t2\t3") == "123"
+    assert compact("1\n2\n3") == "123"
+    assert compact("1\r2\r3") == "123"
+    assert compact("1\u00a02\u00a03") == "123"
+
+
+@pytest.mark.base
+def testBaseCommon_uniqueCompact():
+    """Test the uniqueCompact function."""
+    assert uniqueCompact("! ! !") == "!"
+    assert uniqueCompact("1\t2\t3") == "123"
+    assert uniqueCompact("1\n2\n3") == "123"
+    assert uniqueCompact("1\r2\r3") == "123"
+    assert uniqueCompact("1\u00a02\u00a03") == "123"
+    assert uniqueCompact("3 2 1") == "123"
 
 
 @pytest.mark.base
@@ -601,6 +632,52 @@ def testBaseCommon_xmlIndent():
     data = "foobar"
     xmlIndent(data)  # type: ignore
     assert data == "foobar"
+
+
+@pytest.mark.base
+def testBaseCommon_xmlElement():
+    """Test the xmlElement function."""
+    assert ET.tostring(
+        xmlElement("node", None, attrib={"a": "b"})
+    ) == b'<node a="b" />'
+    assert ET.tostring(
+        xmlElement("node", "text", attrib={"a": "b"})
+    ) == b'<node a="b">text</node>'
+    assert ET.tostring(
+        xmlElement("node", "text", tail="foo", attrib={"a": "b"})
+    ) == b'<node a="b">text</node>foo'
+    assert ET.tostring(
+        xmlElement("node", 42, attrib={"a": "b"})
+    ) == b'<node a="b">42</node>'
+    assert ET.tostring(
+        xmlElement("node", 3.14, attrib={"a": "b"})
+    ) == b'<node a="b">3.14</node>'
+    assert ET.tostring(
+        xmlElement("node", True, attrib={"a": "b"})
+    ) == b'<node a="b">true</node>'
+
+
+@pytest.mark.base
+def testBaseCommon_xmlSubElem():
+    """Test the xmlSubElem function."""
+    assert ET.tostring(
+        xmlSubElem(ET.Element("r"), "node", None, attrib={"a": "b"})
+    ) == b'<node a="b" />'
+    assert ET.tostring(
+        xmlSubElem(ET.Element("r"), "node", "text", attrib={"a": "b"})
+    ) == b'<node a="b">text</node>'
+    assert ET.tostring(
+        xmlSubElem(ET.Element("r"), "node", "text", tail="foo", attrib={"a": "b"})
+    ) == b'<node a="b">text</node>foo'
+    assert ET.tostring(
+        xmlSubElem(ET.Element("r"), "node", 42, attrib={"a": "b"})
+    ) == b'<node a="b">42</node>'
+    assert ET.tostring(
+        xmlSubElem(ET.Element("r"), "node", 3.14, attrib={"a": "b"})
+    ) == b'<node a="b">3.14</node>'
+    assert ET.tostring(
+        xmlSubElem(ET.Element("r"), "node", True, attrib={"a": "b"})
+    ) == b'<node a="b">true</node>'
 
 
 @pytest.mark.base

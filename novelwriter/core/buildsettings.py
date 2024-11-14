@@ -36,7 +36,7 @@ from PyQt5.QtCore import QT_TRANSLATE_NOOP, QCoreApplication
 
 from novelwriter import CONFIG
 from novelwriter.common import checkUuid, isHandle, jsonEncode
-from novelwriter.constants import nwFiles, nwHeadFmt
+from novelwriter.constants import nwFiles, nwHeadFmt, nwStyles
 from novelwriter.core.project import NWProject
 from novelwriter.enum import nwBuildFmt
 from novelwriter.error import logException
@@ -45,29 +45,30 @@ logger = logging.getLogger(__name__)
 
 # The Settings Template
 # =====================
-# Each entry contains a tuple on the form:
-# (type, default, [min value, max value])
+# Each entry contains a tuple on the form: (type, default)
 
-SETTINGS_TEMPLATE = {
+SETTINGS_TEMPLATE: dict[str, tuple[type, str | int | float | bool]] = {
     "filter.includeNovel":     (bool, True),
     "filter.includeNotes":     (bool, False),
     "filter.includeInactive":  (bool, False),
-    "headings.fmtTitle":       (str, nwHeadFmt.TITLE),
+    "headings.fmtPart":        (str, nwHeadFmt.TITLE),
     "headings.fmtChapter":     (str, nwHeadFmt.TITLE),
     "headings.fmtUnnumbered":  (str, nwHeadFmt.TITLE),
     "headings.fmtScene":       (str, "* * *"),
     "headings.fmtAltScene":    (str, ""),
     "headings.fmtSection":     (str, ""),
-    "headings.hideTitle":      (bool, False),
+    "headings.hidePart":       (bool, False),
     "headings.hideChapter":    (bool, False),
     "headings.hideUnnumbered": (bool, False),
     "headings.hideScene":      (bool, False),
     "headings.hideAltScene":   (bool, False),
     "headings.hideSection":    (bool, True),
     "headings.centerTitle":    (bool, True),
+    "headings.centerPart":     (bool, True),
     "headings.centerChapter":  (bool, False),
     "headings.centerScene":    (bool, False),
-    "headings.breakTitle":     (bool, True),
+    "headings.breakTitle":     (bool, False),
+    "headings.breakPart":      (bool, True),
     "headings.breakChapter":   (bool, True),
     "headings.breakScene":     (bool, False),
     "text.includeSynopsis":    (bool, False),
@@ -77,7 +78,7 @@ SETTINGS_TEMPLATE = {
     "text.ignoredKeywords":    (str, ""),
     "text.addNoteHeadings":    (bool, True),
     "format.textFont":         (str, CONFIG.textFont.toString()),
-    "format.lineHeight":       (float, 1.15, 0.75, 3.0),
+    "format.lineHeight":       (float, 1.15),
     "format.justifyText":      (bool, False),
     "format.stripUnicode":     (bool, False),
     "format.replaceTabs":      (bool, False),
@@ -86,6 +87,20 @@ SETTINGS_TEMPLATE = {
     "format.firstLineIndent":  (bool, False),
     "format.firstIndentWidth": (float, 1.4),
     "format.indentFirstPar":   (bool, False),
+    "format.titleMarginT":     (float, nwStyles.T_MARGIN["H0"][0]),
+    "format.titleMarginB":     (float, nwStyles.T_MARGIN["H0"][1]),
+    "format.h1MarginT":        (float, nwStyles.T_MARGIN["H1"][0]),
+    "format.h1MarginB":        (float, nwStyles.T_MARGIN["H1"][1]),
+    "format.h2MarginT":        (float, nwStyles.T_MARGIN["H2"][0]),
+    "format.h2MarginB":        (float, nwStyles.T_MARGIN["H2"][1]),
+    "format.h3MarginT":        (float, nwStyles.T_MARGIN["H3"][0]),
+    "format.h3MarginB":        (float, nwStyles.T_MARGIN["H3"][1]),
+    "format.h4MarginT":        (float, nwStyles.T_MARGIN["H4"][0]),
+    "format.h4MarginB":        (float, nwStyles.T_MARGIN["H4"][1]),
+    "format.textMarginT":      (float, nwStyles.T_MARGIN["TT"][0]),
+    "format.textMarginB":      (float, nwStyles.T_MARGIN["TT"][1]),
+    "format.sepMarginT":       (float, nwStyles.T_MARGIN["SP"][0]),
+    "format.sepMarginB":       (float, nwStyles.T_MARGIN["SP"][1]),
     "format.pageUnit":         (str, "cm"),
     "format.pageSize":         (str, "A4"),
     "format.pageWidth":        (float, 21.0),
@@ -94,9 +109,11 @@ SETTINGS_TEMPLATE = {
     "format.bottomMargin":     (float, 2.0),
     "format.leftMargin":       (float, 2.0),
     "format.rightMargin":      (float, 2.0),
-    "odt.addColours":          (bool, True),
-    "odt.pageHeader":          (str, nwHeadFmt.ODT_AUTO),
-    "odt.pageCountOffset":     (int, 0),
+    "doc.pageHeader":          (str, nwHeadFmt.DOC_AUTO),
+    "doc.pageCountOffset":     (int, 0),
+    "doc.colorHeadings":       (bool, True),
+    "doc.scaleHeadings":       (bool, True),
+    "doc.boldHeadings":        (bool, True),
     "html.addStyles":          (bool, True),
     "html.preserveTabs":       (bool, False),
 }
@@ -108,12 +125,16 @@ SETTINGS_LABELS = {
     "filter.includeInactive":  QT_TRANSLATE_NOOP("Builds", "Inactive Documents"),
 
     "headings":                QT_TRANSLATE_NOOP("Builds", "Headings"),
-    "headings.fmtTitle":       QT_TRANSLATE_NOOP("Builds", "Partition Format"),
+    "headings.fmtPart":        QT_TRANSLATE_NOOP("Builds", "Partition Format"),
     "headings.fmtChapter":     QT_TRANSLATE_NOOP("Builds", "Chapter Format"),
     "headings.fmtUnnumbered":  QT_TRANSLATE_NOOP("Builds", "Unnumbered Format"),
     "headings.fmtScene":       QT_TRANSLATE_NOOP("Builds", "Scene Format"),
     "headings.fmtAltScene":    QT_TRANSLATE_NOOP("Builds", "Alt. Scene Format"),
     "headings.fmtSection":     QT_TRANSLATE_NOOP("Builds", "Section Format"),
+    "headings.styleTitle":     QT_TRANSLATE_NOOP("Builds", "Title Styling"),
+    "headings.stylePart":      QT_TRANSLATE_NOOP("Builds", "Partition Styling"),
+    "headings.styleChapter":   QT_TRANSLATE_NOOP("Builds", "Chapter Styling"),
+    "headings.styleScene":     QT_TRANSLATE_NOOP("Builds", "Scene Styling"),
 
     "text.grpContent":         QT_TRANSLATE_NOOP("Builds", "Text Content"),
     "text.includeSynopsis":    QT_TRANSLATE_NOOP("Builds", "Include Synopsis"),
@@ -121,13 +142,11 @@ SETTINGS_LABELS = {
     "text.includeKeywords":    QT_TRANSLATE_NOOP("Builds", "Include Keywords"),
     "text.includeBodyText":    QT_TRANSLATE_NOOP("Builds", "Include Body Text"),
     "text.ignoredKeywords":    QT_TRANSLATE_NOOP("Builds", "Ignore These Keywords"),
-    "text.grpInsert":          QT_TRANSLATE_NOOP("Builds", "Insert Content"),
     "text.addNoteHeadings":    QT_TRANSLATE_NOOP("Builds", "Add Titles for Notes"),
 
     "format.grpFormat":        QT_TRANSLATE_NOOP("Builds", "Text Format"),
     "format.textFont":         QT_TRANSLATE_NOOP("Builds", "Text Font"),
     "format.lineHeight":       QT_TRANSLATE_NOOP("Builds", "Line Height"),
-    "format.grpOptions":       QT_TRANSLATE_NOOP("Builds", "Text Options"),
     "format.justifyText":      QT_TRANSLATE_NOOP("Builds", "Justify Text Margins"),
     "format.stripUnicode":     QT_TRANSLATE_NOOP("Builds", "Replace Unicode Characters"),
     "format.replaceTabs":      QT_TRANSLATE_NOOP("Builds", "Replace Tabs with Spaces"),
@@ -139,24 +158,29 @@ SETTINGS_LABELS = {
     "format.firstIndentWidth": QT_TRANSLATE_NOOP("Builds", "Indent Width"),
     "format.indentFirstPar":   QT_TRANSLATE_NOOP("Builds", "Indent First Paragraph"),
 
+    "format.grpMargins":       QT_TRANSLATE_NOOP("Builds", "Text Margins"),
+
     "format.grpPage":          QT_TRANSLATE_NOOP("Builds", "Page Layout"),
     "format.pageUnit":         QT_TRANSLATE_NOOP("Builds", "Unit"),
     "format.pageSize":         QT_TRANSLATE_NOOP("Builds", "Page Size"),
-    "format.pageWidth":        QT_TRANSLATE_NOOP("Builds", "Page Width"),
-    "format.pageHeight":       QT_TRANSLATE_NOOP("Builds", "Page Height"),
-    "format.topMargin":        QT_TRANSLATE_NOOP("Builds", "Top Margin"),
-    "format.bottomMargin":     QT_TRANSLATE_NOOP("Builds", "Bottom Margin"),
-    "format.leftMargin":       QT_TRANSLATE_NOOP("Builds", "Left Margin"),
-    "format.rightMargin":      QT_TRANSLATE_NOOP("Builds", "Right Margin"),
+    "format.pageMargins":      QT_TRANSLATE_NOOP("Builds", "Page Margins"),
 
-    "odt":                     QT_TRANSLATE_NOOP("Builds", "Open Document (.odt)"),
-    "odt.addColours":          QT_TRANSLATE_NOOP("Builds", "Add Highlight Colours"),
-    "odt.pageHeader":          QT_TRANSLATE_NOOP("Builds", "Page Header"),
-    "odt.pageCountOffset":     QT_TRANSLATE_NOOP("Builds", "Page Counter Offset"),
+    "doc":                     QT_TRANSLATE_NOOP("Builds", "Document Style"),
+    "doc.pageHeader":          QT_TRANSLATE_NOOP("Builds", "Page Header"),
+    "doc.pageCountOffset":     QT_TRANSLATE_NOOP("Builds", "Page Counter Offset"),
+    "doc.colorHeadings":       QT_TRANSLATE_NOOP("Builds", "Add Colours to Headings"),
+    "doc.scaleHeadings":       QT_TRANSLATE_NOOP("Builds", "Increase Size of Headings"),
+    "doc.boldHeadings":        QT_TRANSLATE_NOOP("Builds", "Bold Headings"),
 
-    "html":                    QT_TRANSLATE_NOOP("Builds", "HTML (.html)"),
+    "html":                    QT_TRANSLATE_NOOP("Builds", "HTML Options"),
     "html.addStyles":          QT_TRANSLATE_NOOP("Builds", "Add CSS Styles"),
     "html.preserveTabs":       QT_TRANSLATE_NOOP("Builds", "Preserve Tab Characters"),
+}
+
+RENAMED = {
+    "odt.addColours": "doc.addColours",
+    "odt.pageHeader": "doc.pageHeader",
+    "odt.pageCountOffset": "doc.pageCountOffset",
 }
 
 
@@ -348,18 +372,12 @@ class BuildSettings:
             self._changed = True
         return
 
-    def setValue(self, key: str, value: str | int | bool | float) -> bool:
+    def setValue(self, key: str, value: str | int | float | bool) -> None:
         """Set a specific value for a build setting."""
-        if key not in SETTINGS_TEMPLATE:
-            return False
-        definition = SETTINGS_TEMPLATE[key]
-        if not isinstance(value, definition[0]):
-            return False
-        if len(definition) == 4 and isinstance(value, (int, float)):
-            value = min(max(value, definition[2]), definition[3])
-        self._changed = value != self._settings[key]
-        self._settings[key] = value
-        return True
+        if (d := SETTINGS_TEMPLATE.get(key)) and len(d) == 2 and isinstance(value, d[0]):
+            self._changed = value != self._settings[key]
+            self._settings[key] = value
+        return
 
     ##
     #  Methods
@@ -478,11 +496,20 @@ class BuildSettings:
         self._settings = {k: v[1] for k, v in SETTINGS_TEMPLATE.items()}
         if isinstance(settings, dict):
             for key, value in settings.items():
-                self.setValue(key, value)
+                self.setValue(RENAMED.get(key, key), value)
 
         self._changed = False
 
         return
+
+    @classmethod
+    def duplicate(cls, source: BuildSettings) -> BuildSettings:
+        """Make a copy of another build."""
+        cls = BuildSettings()
+        cls.unpack(source.pack())
+        cls._uuid = str(uuid.uuid4())
+        cls._name = f"{source.name} 2"
+        return cls
 
 
 class BuildCollection:

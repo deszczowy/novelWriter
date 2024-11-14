@@ -39,16 +39,16 @@ from PyQt5.QtWidgets import (
 )
 
 from novelwriter import CONFIG, SHARED
-from novelwriter.common import minmax
-from novelwriter.constants import nwHeaders, nwKeyWords, nwLabels, trConst
+from novelwriter.common import minmax, qtLambda
+from novelwriter.constants import nwKeyWords, nwLabels, nwStyles, trConst
 from novelwriter.core.index import IndexHeading
 from novelwriter.enum import nwDocMode, nwItemClass, nwOutline
 from novelwriter.extensions.modified import NIconToolButton
 from novelwriter.extensions.novelselector import NovelSelector
 from novelwriter.gui.theme import STYLES_MIN_TOOLBUTTON
 from novelwriter.types import (
-    QtAlignRight, QtDecoration, QtMouseLeft, QtMouseMiddle, QtSizeExpanding,
-    QtUserRole
+    QtAlignRight, QtDecoration, QtMouseLeft, QtMouseMiddle, QtScrollAlwaysOff,
+    QtScrollAsNeeded, QtSizeExpanding, QtUserRole
 )
 
 logger = logging.getLogger(__name__)
@@ -87,7 +87,6 @@ class GuiNovelView(QWidget):
 
         # Function Mappings
         self.getSelectedHandle = self.novelTree.getSelectedHandle
-        self.setActiveHandle = self.novelTree.setActiveHandle
 
         return
 
@@ -162,6 +161,12 @@ class GuiNovelView(QWidget):
     ##
     #  Public Slots
     ##
+
+    @pyqtSlot(str)
+    def setActiveHandle(self, tHandle: str) -> None:
+        """Highlight the rows associated with a given handle."""
+        self.novelTree.setActiveHandle(tHandle)
+        return
 
     @pyqtSlot()
     def refreshTree(self) -> None:
@@ -341,7 +346,7 @@ class GuiNovelToolBar(QWidget):
         aLast = self.mLastCol.addAction(actionLabel)
         aLast.setCheckable(True)
         aLast.setActionGroup(self.gLastCol)
-        aLast.triggered.connect(lambda: self.setLastColType(colType))
+        aLast.triggered.connect(qtLambda(self.setLastColType, colType))
         self.aLastCol[colType] = aLast
         return
 
@@ -367,11 +372,11 @@ class GuiNovelTree(QTreeWidget):
         self.novelView = novelView
 
         # Internal Variables
-        self._treeMap     = {}
         self._lastBuild   = 0
         self._lastCol     = NovelTreeColumn.POV
         self._lastColSize = 0.25
         self._actHandle   = None
+        self._treeMap: dict[str, QTreeWidgetItem] = {}
 
         # Cached Strings
         self._povLabel = trConst(nwLabels.KEY_NAME[nwKeyWords.POV_KEY])
@@ -433,14 +438,14 @@ class GuiNovelTree(QTreeWidget):
         """Set or update tree widget settings."""
         # Scroll bars
         if CONFIG.hideVScroll:
-            self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+            self.setVerticalScrollBarPolicy(QtScrollAlwaysOff)
         else:
-            self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+            self.setVerticalScrollBarPolicy(QtScrollAsNeeded)
 
         if CONFIG.hideHScroll:
-            self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+            self.setHorizontalScrollBarPolicy(QtScrollAlwaysOff)
         else:
-            self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+            self.setHorizontalScrollBarPolicy(QtScrollAsNeeded)
 
         return
 
@@ -479,16 +484,9 @@ class GuiNovelTree(QTreeWidget):
         if rootHandle is None:
             rootHandle = SHARED.project.tree.findRoot(nwItemClass.NOVEL)
 
-        treeChanged = SHARED.mainGui.projView.changedSince(self._lastBuild)
-        indexChanged = SHARED.project.index.rootChangedSince(rootHandle, self._lastBuild)
-        if not (treeChanged or indexChanged or overRide):
-            logger.debug("No changes have been made to the novel index")
-            return
-
-        selItem = self.selectedItems()
         titleKey = None
-        if selItem:
-            titleKey = selItem[0].data(self.C_DATA, self.D_KEY)
+        if selItems := self.selectedItems():
+            titleKey = selItems[0].data(self.C_DATA, self.D_KEY)
 
         self._populateTree(rootHandle)
         SHARED.project.data.setLastHandle(rootHandle, "novelTree")
@@ -540,25 +538,25 @@ class GuiNovelTree(QTreeWidget):
         self._lastColSize = minmax(colSize, 15, 75)/100.0
         return
 
-    def setActiveHandle(self, tHandle: str | None, doScroll: bool = False) -> None:
+    def setActiveHandle(self, tHandle: str | None) -> None:
         """Highlight the rows associated with a given handle."""
         didScroll = False
-        self._actHandle = tHandle
-        for i in range(self.topLevelItemCount()):
-            if tItem := self.topLevelItem(i):
-                if tItem.data(self.C_DATA, self.D_HANDLE) == tHandle:
-                    tItem.setBackground(self.C_TITLE, self.palette().alternateBase())
-                    tItem.setBackground(self.C_WORDS, self.palette().alternateBase())
-                    tItem.setBackground(self.C_EXTRA, self.palette().alternateBase())
-                    tItem.setBackground(self.C_MORE, self.palette().alternateBase())
-                    if doScroll and not didScroll:
-                        self.scrollToItem(tItem, QAbstractItemView.ScrollHint.PositionAtCenter)
+        brushOn = self.palette().alternateBase()
+        brushOff = self.palette().base()
+        if pHandle := self._actHandle:
+            for key, item in self._treeMap.items():
+                if key.startswith(pHandle):
+                    for i in range(self.columnCount()):
+                        item.setBackground(i, brushOff)
+        if tHandle:
+            for key, item in self._treeMap.items():
+                if key.startswith(tHandle):
+                    for i in range(self.columnCount()):
+                        item.setBackground(i, brushOn)
+                    if not didScroll:
+                        self.scrollToItem(item, QAbstractItemView.ScrollHint.PositionAtCenter)
                         didScroll = True
-                else:
-                    tItem.setBackground(self.C_TITLE, self.palette().base())
-                    tItem.setBackground(self.C_WORDS, self.palette().base())
-                    tItem.setBackground(self.C_EXTRA, self.palette().base())
-                    tItem.setBackground(self.C_MORE, self.palette().base())
+        self._actHandle = tHandle or None
         return
 
     ##
@@ -683,7 +681,7 @@ class GuiNovelTree(QTreeWidget):
     def _updateTreeItemValues(self, trItem: QTreeWidgetItem, idxItem: IndexHeading,
                               tHandle: str, sTitle: str) -> None:
         """Set the tree item values from the index entry."""
-        iLevel = nwHeaders.H_LEVEL.get(idxItem.level, 0)
+        iLevel = nwStyles.H_LEVEL.get(idxItem.level, 0)
         hDec = SHARED.theme.getHeaderDecoration(iLevel)
 
         trItem.setData(self.C_TITLE, QtDecoration, hDec)

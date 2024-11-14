@@ -25,10 +25,11 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 from __future__ import annotations
 
 import logging
+import re
 
 from time import time
 
-from PyQt5.QtCore import QRegularExpression, Qt
+from PyQt5.QtCore import Qt
 from PyQt5.QtGui import (
     QBrush, QColor, QFont, QSyntaxHighlighter, QTextBlockUserData,
     QTextCharFormat, QTextDocument
@@ -36,20 +37,17 @@ from PyQt5.QtGui import (
 
 from novelwriter import CONFIG, SHARED
 from novelwriter.common import checkInt
-from novelwriter.constants import nwHeaders, nwRegEx, nwUnicode
+from novelwriter.constants import nwStyles, nwUnicode
 from novelwriter.core.index import processComment
 from novelwriter.enum import nwComment
-from novelwriter.text.patterns import REGEX_PATTERNS
-from novelwriter.types import QRegExUnicode
+from novelwriter.text.patterns import REGEX_PATTERNS, DialogParser
 
 logger = logging.getLogger(__name__)
 
-SPELLRX = QRegularExpression(r"\b[^\s\-\+\/–—\[\]:]+\b")
-SPELLRX.setPatternOptions(QRegExUnicode)
-SPELLSC = QRegularExpression(nwRegEx.FMT_SC)
-SPELLSC.setPatternOptions(QRegExUnicode)
-SPELLSV = QRegularExpression(nwRegEx.FMT_SV)
-SPELLSV.setPatternOptions(QRegExUnicode)
+RX_URL = REGEX_PATTERNS.url
+RX_WORDS = REGEX_PATTERNS.wordSplit
+RX_FMT_SC = REGEX_PATTERNS.shortcodePlain
+RX_FMT_SV = REGEX_PATTERNS.shortcodeValue
 
 BLOCK_NONE  = 0
 BLOCK_TEXT  = 1
@@ -61,7 +59,7 @@ class GuiDocHighlighter(QSyntaxHighlighter):
 
     __slots__ = (
         "_tHandle", "_isNovel", "_isInactive", "_spellCheck", "_spellErr",
-        "_hStyles", "_minRules", "_txtRules", "_cmnRules",
+        "_hStyles", "_minRules", "_txtRules", "_cmnRules", "_dialogParser",
     )
 
     def __init__(self, document: QTextDocument) -> None:
@@ -76,9 +74,11 @@ class GuiDocHighlighter(QSyntaxHighlighter):
         self._spellErr = QTextCharFormat()
 
         self._hStyles: dict[str, QTextCharFormat] = {}
-        self._minRules: list[tuple[QRegularExpression, dict[int, QTextCharFormat]]] = []
-        self._txtRules: list[tuple[QRegularExpression, dict[int, QTextCharFormat]]] = []
-        self._cmnRules: list[tuple[QRegularExpression, dict[int, QTextCharFormat]]] = []
+        self._minRules: list[tuple[re.Pattern, dict[int, QTextCharFormat]]] = []
+        self._txtRules: list[tuple[re.Pattern, dict[int, QTextCharFormat]]] = []
+        self._cmnRules: list[tuple[re.Pattern, dict[int, QTextCharFormat]]] = []
+
+        self._dialogParser = DialogParser()
 
         self.initHighlighter()
 
@@ -98,14 +98,14 @@ class GuiDocHighlighter(QSyntaxHighlighter):
 
         # Create Character Formats
         self._addCharFormat("text",      SHARED.theme.colText)
-        self._addCharFormat("header1",   SHARED.theme.colHead, "b", nwHeaders.H_SIZES[1])
-        self._addCharFormat("header2",   SHARED.theme.colHead, "b", nwHeaders.H_SIZES[2])
-        self._addCharFormat("header3",   SHARED.theme.colHead, "b", nwHeaders.H_SIZES[3])
-        self._addCharFormat("header4",   SHARED.theme.colHead, "b", nwHeaders.H_SIZES[4])
-        self._addCharFormat("head1h",    SHARED.theme.colHeadH, "b", nwHeaders.H_SIZES[1])
-        self._addCharFormat("head2h",    SHARED.theme.colHeadH, "b", nwHeaders.H_SIZES[2])
-        self._addCharFormat("head3h",    SHARED.theme.colHeadH, "b", nwHeaders.H_SIZES[3])
-        self._addCharFormat("head4h",    SHARED.theme.colHeadH, "b", nwHeaders.H_SIZES[4])
+        self._addCharFormat("header1",   SHARED.theme.colHead, "b", nwStyles.H_SIZES[1])
+        self._addCharFormat("header2",   SHARED.theme.colHead, "b", nwStyles.H_SIZES[2])
+        self._addCharFormat("header3",   SHARED.theme.colHead, "b", nwStyles.H_SIZES[3])
+        self._addCharFormat("header4",   SHARED.theme.colHead, "b", nwStyles.H_SIZES[4])
+        self._addCharFormat("head1h",    SHARED.theme.colHeadH, "b", nwStyles.H_SIZES[1])
+        self._addCharFormat("head2h",    SHARED.theme.colHeadH, "b", nwStyles.H_SIZES[2])
+        self._addCharFormat("head3h",    SHARED.theme.colHeadH, "b", nwStyles.H_SIZES[3])
+        self._addCharFormat("head4h",    SHARED.theme.colHeadH, "b", nwStyles.H_SIZES[4])
         self._addCharFormat("bold",      colEmph, "b")
         self._addCharFormat("italic",    colEmph, "i")
         self._addCharFormat("strike",    SHARED.theme.colHidden, "s")
@@ -116,10 +116,11 @@ class GuiDocHighlighter(QSyntaxHighlighter):
         self._addCharFormat("replace",   SHARED.theme.colRepTag)
         self._addCharFormat("hidden",    SHARED.theme.colHidden)
         self._addCharFormat("markup",    SHARED.theme.colHidden)
+        self._addCharFormat("link",      SHARED.theme.colLink, "u")
         self._addCharFormat("note",      SHARED.theme.colNote)
         self._addCharFormat("code",      SHARED.theme.colCode)
         self._addCharFormat("keyword",   SHARED.theme.colKey)
-        self._addCharFormat("tag",       SHARED.theme.colTag)
+        self._addCharFormat("tag",       SHARED.theme.colTag, "u")
         self._addCharFormat("modifier",  SHARED.theme.colMod)
         self._addCharFormat("value",     SHARED.theme.colVal)
         self._addCharFormat("optional",  SHARED.theme.colOpt)
@@ -133,10 +134,11 @@ class GuiDocHighlighter(QSyntaxHighlighter):
         self._txtRules.clear()
         self._cmnRules.clear()
 
+        self._dialogParser.initParser()
+
         # Multiple or Trailing Spaces
         if CONFIG.showMultiSpaces:
-            rxRule = QRegularExpression(r"[ ]{2,}|[ ]*$")
-            rxRule.setPatternOptions(QRegExUnicode)
+            rxRule = re.compile(r"[ ]{2,}|[ ]*$", re.UNICODE)
             hlRule = {
                 0: self._hStyles["mspaces"],
             }
@@ -145,8 +147,7 @@ class GuiDocHighlighter(QSyntaxHighlighter):
             self._cmnRules.append((rxRule, hlRule))
 
         # Non-Breaking Spaces
-        rxRule = QRegularExpression(f"[{nwUnicode.U_NBSP}{nwUnicode.U_THNBSP}]+")
-        rxRule.setPatternOptions(QRegExUnicode)
+        rxRule = re.compile(f"[{nwUnicode.U_NBSP}{nwUnicode.U_THNBSP}]+", re.UNICODE)
         hlRule = {
             0: self._hStyles["nobreak"],
         }
@@ -154,30 +155,8 @@ class GuiDocHighlighter(QSyntaxHighlighter):
         self._txtRules.append((rxRule, hlRule))
         self._cmnRules.append((rxRule, hlRule))
 
-        # Dialogue
-        if CONFIG.dialogStyle > 0:
-            rxRule = REGEX_PATTERNS.dialogStyle
-            hlRule = {
-                0: self._hStyles["dialog"],
-            }
-            self._txtRules.append((rxRule, hlRule))
-
-        if CONFIG.dialogLine:
-            rxRule = REGEX_PATTERNS.dialogLine
-            hlRule = {
-                0: self._hStyles["dialog"],
-            }
-            self._txtRules.append((rxRule, hlRule))
-
-        if CONFIG.narratorBreak:
-            rxRule = REGEX_PATTERNS.narratorBreak
-            hlRule = {
-                0: self._hStyles["text"],
-            }
-            self._txtRules.append((rxRule, hlRule))
-
-        if CONFIG.altDialogOpen and CONFIG.altDialogClose:
-            rxRule = REGEX_PATTERNS.altDialogStyle
+        # Alt Dialogue
+        if rxRule := REGEX_PATTERNS.altDialogStyle:
             hlRule = {
                 0: self._hStyles["altdialog"],
             }
@@ -236,9 +215,17 @@ class GuiDocHighlighter(QSyntaxHighlighter):
         self._txtRules.append((rxRule, hlRule))
         self._cmnRules.append((rxRule, hlRule))
 
+        # URLs
+        rxRule = REGEX_PATTERNS.url
+        hlRule = {
+            0: self._hStyles["link"],
+        }
+        self._minRules.append((rxRule, hlRule))
+        self._txtRules.append((rxRule, hlRule))
+        self._cmnRules.append((rxRule, hlRule))
+
         # Alignment Tags
-        rxRule = QRegularExpression(r"(^>{1,2}|<{1,2}$)")
-        rxRule.setPatternOptions(QRegExUnicode)
+        rxRule = re.compile(r"(^>{1,2}|<{1,2}$)", re.UNICODE)
         hlRule = {
             1: self._hStyles["markup"],
         }
@@ -246,8 +233,7 @@ class GuiDocHighlighter(QSyntaxHighlighter):
         self._txtRules.append((rxRule, hlRule))
 
         # Auto-Replace Tags
-        rxRule = QRegularExpression(r"<(\S+?)>")
-        rxRule.setPatternOptions(QRegExUnicode)
+        rxRule = re.compile(r"<(\S+?)>", re.UNICODE)
         hlRule = {
             0: self._hStyles["replace"],
         }
@@ -406,15 +392,17 @@ class GuiDocHighlighter(QSyntaxHighlighter):
         else:  # Text Paragraph
             self.setCurrentBlockState(BLOCK_TEXT)
             hRules = self._txtRules if self._isNovel else self._minRules
+            if self._dialogParser.enabled:
+                for pos, end in self._dialogParser(text):
+                    length = end - pos
+                    self.setFormat(pos, length, self._hStyles["dialog"])
 
         if hRules:
             for rX, hRule in hRules:
-                rxItt = rX.globalMatch(text, xOff)
-                while rxItt.hasNext():
-                    rxMatch = rxItt.next()
+                for res in re.finditer(rX, text[xOff:]):
                     for xM, hFmt in hRule.items():
-                        xPos = rxMatch.capturedStart(xM)
-                        xEnd = rxMatch.capturedEnd(xM)
+                        xPos = res.start(xM) + xOff
+                        xEnd = res.end(xM) + xOff
                         for x in range(xPos, xEnd):
                             cFmt = self.format(x)
                             if cFmt.fontStyleName() != "markup":
@@ -426,9 +414,10 @@ class GuiDocHighlighter(QSyntaxHighlighter):
             data = TextBlockData()
             self.setCurrentBlockUserData(data)
 
+        data.processText(text, xOff)
         if self._spellCheck:
-            for xPos, xLen in data.spellCheck(text, xOff):
-                for x in range(xPos, xPos+xLen):
+            for xPos, xEnd in data.spellCheck():
+                for x in range(xPos, xEnd):
                     cFmt = self.format(x)
                     cFmt.merge(self._spellErr)
                     self.setFormat(x, 1, cFmt)
@@ -456,6 +445,8 @@ class GuiDocHighlighter(QSyntaxHighlighter):
                 charFormat.setFontWeight(QFont.Weight.Bold)
             if "i" in styles:
                 charFormat.setFontItalic(True)
+            if "u" in styles:
+                charFormat.setFontUnderline(True)
             if "s" in styles:
                 charFormat.setFontStrikeOut(True)
             if "err" in styles:
@@ -474,40 +465,61 @@ class GuiDocHighlighter(QSyntaxHighlighter):
 
 class TextBlockData(QTextBlockUserData):
 
-    __slots__ = ("_spellErrors")
+    __slots__ = ("_text", "_offset", "_metaData", "_spellErrors")
 
     def __init__(self) -> None:
         super().__init__()
-        self._spellErrors: list[tuple[int, int]] = []
+        self._text = ""
+        self._offset = 0
+        self._metaData: list[tuple[int, int, str, str]] = []
+        self._spellErrors: list[tuple[int, int,]] = []
         return
+
+    @property
+    def metaData(self) -> list[tuple[int, int, str, str]]:
+        """Return meta data from last check."""
+        return self._metaData
 
     @property
     def spellErrors(self) -> list[tuple[int, int]]:
         """Return spell error data from last check."""
         return self._spellErrors
 
-    def spellCheck(self, text: str, offset: int) -> list[tuple[int, int]]:
+    def processText(self, text: str, offset: int) -> None:
+        """Extract meta data from the text."""
+        self._metaData = []
+        if "[" in text:
+            # Strip shortcodes
+            for regEx in [RX_FMT_SC, RX_FMT_SV]:
+                for res in regEx.finditer(text, offset):
+                    if (s := res.start(0)) >= 0 and (e := res.end(0)) >= 0:
+                        pad = " "*(e - s)
+                        text = f"{text[:s]}{pad}{text[e:]}"
+
+        if "http" in text:
+            # Strip URLs
+            for res in RX_URL.finditer(text, offset):
+                if (s := res.start(0)) >= 0 and (e := res.end(0)) >= 0:
+                    pad = " "*(e - s)
+                    text = f"{text[:s]}{pad}{text[e:]}"
+                    self._metaData.append((s, e, res.group(0), "url"))
+
+        self._text = text
+        self._offset = offset
+
+        return
+
+    def spellCheck(self) -> list[tuple[int, int]]:
         """Run the spell checker and cache the result, and return the
         list of spell check errors.
         """
-        if "[" in text:
-            # Strip shortcodes
-            for rX in [SPELLSC, SPELLSV]:
-                rxItt = rX.globalMatch(text, offset)
-                while rxItt.hasNext():
-                    rxMatch = rxItt.next()
-                    xPos = rxMatch.capturedStart(0)
-                    xLen = rxMatch.capturedLength(0)
-                    xEnd = rxMatch.capturedEnd(0)
-                    text = text[:xPos] + " "*xLen + text[xEnd:]
-
         self._spellErrors = []
-        rxSpell = SPELLRX.globalMatch(text.replace("_", " "), offset)
-        while rxSpell.hasNext():
-            rxMatch = rxSpell.next()
-            if not SHARED.spelling.checkWord(rxMatch.captured(0)):
-                if not rxMatch.captured(0).isnumeric() and not rxMatch.captured(0).isupper():
-                    self._spellErrors.append(
-                        (rxMatch.capturedStart(0), rxMatch.capturedLength(0))
-                    )
+        checker = SHARED.spelling
+        for res in RX_WORDS.finditer(self._text.replace("_", " "), self._offset):
+            if (
+                (word := res.group(0))
+                and not (word.isnumeric() or word.isupper() or checker.checkWord(word))
+            ):
+                self._spellErrors.append((res.start(0), res.end(0)))
+
         return self._spellErrors

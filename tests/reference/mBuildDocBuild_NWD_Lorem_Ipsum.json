@@ -2,21 +2,26 @@
   "meta": {
     "projectName": "Lorem Ipsum",
     "novelAuthor": "lipsum.com",
-    "buildTime": 1714229171,
-    "buildTimeStr": "2024-04-27 16:46:11"
+    "buildTime": 1731001720,
+    "buildTimeStr": "2024-11-07 18:48:40"
   },
   "text": {
     "nwd": [
       [
         "#! Lorem Ipsum",
         "",
-        "**By lipsum.com**",
+        ">> **By lipsum.com** <<",
         "",
-        "\u201cNeque porro quisquam est qui dolorem ipsum quia dolor sit amet, consectetur, adipisci velit\u2026\u201d",
+        ">> Word Count: [field:allWords] <<",
         "",
-        "\u201cThere is no one who loves pain itself, who seeks after it and wants to have it, simply because it is pain\u2026\u201d"
+        ">> Character Count: [field:allChars] <<",
+        "",
+        ">> \u201cNeque porro quisquam est qui dolorem ipsum quia dolor sit amet, consectetur, adipisci velit\u2026\u201d <<",
+        "",
+        ">> \u201cThere is no one who loves pain itself, who seeks after it and wants to have it, simply because it is pain\u2026\u201d <<"
       ],
       [
+        "[NEW PAGE]",
         "",
         "% Exctracted from the lipsum.com website.",
         "",
@@ -31,12 +36,14 @@
         "",
         "_Lorem Ipsum_ is simply dummy text[footnote:f9kgf] of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s, when an unknown printer took a galley of type and scrambled it to make a type specimen book. It has survived not only five centuries, but also the leap into electronic typesetting, remaining essentially unchanged. It was popularised in the 1960s with the release of Letraset sheets containing Lorem Ipsum passages, and more recently with desktop publishing software like Aldus PageMaker including versions of Lorem Ipsum.",
         "",
+        "See http://lipsum.com",
+        "",
         "%Footnote.f9kgf: _Lorem ipsum_ is typically a corrupted version of De finibus bonorum et malorum, a 1st-century BC text by the Roman statesman and philosopher Cicero, with words altered, added, and removed to make it nonsensical and improper Latin. (Source: Wikipedia)"
       ],
       [
         "# Act One",
         "",
-        "\u201cFusce maximus felis libero\u201d"
+        ">> \u201cFusce maximus felis libero\u201d <<"
       ],
       [
         "## Chapter One",

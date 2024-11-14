@@ -500,13 +500,15 @@ class GuiIcons:
 
         # Format Icons
         "fmt_bold", "fmt_bold-md", "fmt_italic", "fmt_italic-md", "fmt_mark", "fmt_strike",
-        "fmt_strike-md", "fmt_subscript", "fmt_superscript", "fmt_underline",
+        "fmt_strike-md", "fmt_subscript", "fmt_superscript", "fmt_underline", "margin_bottom",
+        "margin_left", "margin_right", "margin_top", "size_height", "size_width",
 
         # General Button Icons
-        "add", "add_document", "backward", "bookmark", "browse", "checked", "close", "cross",
-        "document", "down", "edit", "export", "font", "forward", "import", "list", "maximise",
-        "menu", "minimise", "more", "noncheckable", "open", "panel", "quote", "refresh", "remove",
-        "revert", "search_replace", "search", "settings", "star", "unchecked", "up", "view",
+        "add", "add_document", "backward", "bookmark", "browse", "checked", "close", "copy",
+        "cross", "document", "down", "edit", "export", "font", "forward", "import", "list",
+        "maximise", "menu", "minimise", "more", "noncheckable", "open", "panel", "quote",
+        "refresh", "remove", "revert", "search_replace", "search", "settings", "star", "unchecked",
+        "up", "view",
 
         # Switches
         "sticky-on", "sticky-off",

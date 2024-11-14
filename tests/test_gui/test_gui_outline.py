@@ -26,11 +26,12 @@ from shutil import copyfile
 
 import pytest
 
-from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QAction, QFileDialog, QWidget
 
 from novelwriter import CONFIG, SHARED
+from novelwriter.constants import nwKeyWords
 from novelwriter.enum import nwItemClass, nwOutline, nwView
+from novelwriter.types import QtScrollAlwaysOff, QtScrollAsNeeded
 
 from tests.tools import buildTestProject, cmpFiles, writeFile
 
@@ -53,18 +54,18 @@ def testGuiOutline_Main(qtbot, monkeypatch, nwGUI, projPath):
     CONFIG.hideVScroll = True
     CONFIG.hideHScroll = True
     outlineView.initSettings()
-    assert outlineTree.verticalScrollBarPolicy() == Qt.ScrollBarAlwaysOff
-    assert outlineTree.horizontalScrollBarPolicy() == Qt.ScrollBarAlwaysOff
-    assert outlineData.verticalScrollBarPolicy() == Qt.ScrollBarAlwaysOff
-    assert outlineData.horizontalScrollBarPolicy() == Qt.ScrollBarAlwaysOff
+    assert outlineTree.verticalScrollBarPolicy() == QtScrollAlwaysOff
+    assert outlineTree.horizontalScrollBarPolicy() == QtScrollAlwaysOff
+    assert outlineData.verticalScrollBarPolicy() == QtScrollAlwaysOff
+    assert outlineData.horizontalScrollBarPolicy() == QtScrollAlwaysOff
 
     CONFIG.hideVScroll = False
     CONFIG.hideHScroll = False
     outlineView.initSettings()
-    assert outlineTree.verticalScrollBarPolicy() == Qt.ScrollBarAsNeeded
-    assert outlineTree.horizontalScrollBarPolicy() == Qt.ScrollBarAsNeeded
-    assert outlineData.verticalScrollBarPolicy() == Qt.ScrollBarAsNeeded
-    assert outlineData.horizontalScrollBarPolicy() == Qt.ScrollBarAsNeeded
+    assert outlineTree.verticalScrollBarPolicy() == QtScrollAsNeeded
+    assert outlineTree.horizontalScrollBarPolicy() == QtScrollAsNeeded
+    assert outlineData.verticalScrollBarPolicy() == QtScrollAsNeeded
+    assert outlineData.horizontalScrollBarPolicy() == QtScrollAsNeeded
 
     # Check focus
     with monkeypatch.context() as mp:
@@ -152,7 +153,7 @@ def testGuiOutline_Main(qtbot, monkeypatch, nwGUI, projPath):
     # Trigger the menu entry for all hidden columns
     for hItem in nwOutline:
         if outlineTree.DEF_HIDDEN[hItem]:
-            outlineMenu.actionMap[hItem].activate(QAction.Trigger)
+            outlineMenu.actionMap[hItem].activate(QAction.ActionEvent.Trigger)
 
     # Now no columns should be hidden
     outlineTree._saveHeaderState()
@@ -165,12 +166,12 @@ def testGuiOutline_Main(qtbot, monkeypatch, nwGUI, projPath):
 
     # Current Order
     order = [outlineTree._colIdx[col] for col in outlineTree._treeOrder]
-    assert order == [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
+    assert order == [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]
 
     # Move 3 to 0
     outlineTree._columnMoved(0, 3, 0)
     order = [outlineTree._colIdx[col] for col in outlineTree._treeOrder]
-    assert order == [3, 0, 1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
+    assert order == [3, 0, 1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]
 
     # qtbot.stop()
 
@@ -241,9 +242,9 @@ def testGuiOutline_Content(qtbot, monkeypatch, nwGUI, prjLipsum, fncPath, tstPat
     assert outlineData.fileValue.text() == "Lorem Ipsum"
     assert outlineData.itemValue.text() == "Finished"
 
-    assert outlineData.cCValue.text() == "230"
-    assert outlineData.wCValue.text() == "40"
-    assert outlineData.pCValue.text() == "3"
+    assert outlineData.cCValue.text() == "259"
+    assert outlineData.wCValue.text() == "44"
+    assert outlineData.pCValue.text() == "5"
 
     # Scene One
     selItem = outlineTree.topLevelItem(4)
@@ -261,7 +262,7 @@ def testGuiOutline_Content(qtbot, monkeypatch, nwGUI, prjLipsum, fncPath, tstPat
     assert outlineData.itemValue.text() == "Finished"
 
     # Click POV Link
-    assert outlineData.povKeyValue.text() == "<a href='Bod'>Bod</a>"
+    assert outlineData.tagValues[nwKeyWords.POV_KEY][1].text() == "<a href='Bod'>Bod</a>"
     outlineView._tagClicked("Bod")
     assert nwGUI.docViewer.docHandle == "4c4f28287af27"
 

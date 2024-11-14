@@ -31,34 +31,40 @@ import logging
 from enum import Enum
 
 from PyQt5.QtCore import QPoint, Qt, QUrl, pyqtSignal, pyqtSlot
-from PyQt5.QtGui import QCursor, QMouseEvent, QPalette, QResizeEvent, QTextCursor
+from PyQt5.QtGui import QCursor, QDesktopServices, QMouseEvent, QPalette, QResizeEvent, QTextCursor
 from PyQt5.QtWidgets import (
     QAction, QApplication, QFrame, QHBoxLayout, QMenu, QTextBrowser,
     QToolButton, QWidget
 )
 
 from novelwriter import CONFIG, SHARED
-from novelwriter.constants import nwHeaders, nwUnicode
-from novelwriter.core.toqdoc import TextDocumentTheme, ToQTextDocument
+from novelwriter.common import qtLambda
+from novelwriter.constants import nwStyles, nwUnicode
 from novelwriter.enum import nwDocAction, nwDocMode, nwItemType
 from novelwriter.error import logException
 from novelwriter.extensions.configlayout import NColourLabel
 from novelwriter.extensions.eventfilters import WheelEventFilter
 from novelwriter.extensions.modified import NIconToolButton
+from novelwriter.formats.shared import TextDocumentTheme
+from novelwriter.formats.toqdoc import ToQTextDocument
 from novelwriter.gui.theme import STYLES_MIN_TOOLBUTTON
-from novelwriter.types import QtAlignCenterTop, QtKeepAnchor, QtMouseLeft, QtMoveAnchor
+from novelwriter.types import (
+    QtAlignCenterTop, QtKeepAnchor, QtMouseLeft, QtMoveAnchor,
+    QtScrollAlwaysOff, QtScrollAsNeeded
+)
 
 logger = logging.getLogger(__name__)
 
 
 class GuiDocViewer(QTextBrowser):
 
+    closeDocumentRequest = pyqtSignal()
     documentLoaded = pyqtSignal(str)
     loadDocumentTagRequest = pyqtSignal(str, Enum)
-    closeDocumentRequest = pyqtSignal()
+    openDocumentRequest = pyqtSignal(str, Enum, str, bool)
     reloadDocumentRequest = pyqtSignal()
-    togglePanelVisibility = pyqtSignal()
     requestProjectItemSelected = pyqtSignal(str, bool)
+    togglePanelVisibility = pyqtSignal()
 
     def __init__(self, parent: QWidget) -> None:
         super().__init__(parent=parent)
@@ -72,6 +78,7 @@ class GuiDocViewer(QTextBrowser):
         # Settings
         self.setMinimumWidth(CONFIG.pxInt(300))
         self.setAutoFillBackground(True)
+        self.setOpenLinks(False)
         self.setOpenExternalLinks(False)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.setFrameStyle(QFrame.Shape.NoFrame)
@@ -162,6 +169,7 @@ class GuiDocViewer(QTextBrowser):
         self._docTheme.text      = SHARED.theme.colText
         self._docTheme.highlight = SHARED.theme.colMark
         self._docTheme.head      = SHARED.theme.colHead
+        self._docTheme.link      = SHARED.theme.colLink
         self._docTheme.comment   = SHARED.theme.colHidden
         self._docTheme.note      = SHARED.theme.colNote
         self._docTheme.code      = SHARED.theme.colCode
@@ -177,14 +185,14 @@ class GuiDocViewer(QTextBrowser):
 
         # Scroll bars
         if CONFIG.hideVScroll:
-            self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+            self.setVerticalScrollBarPolicy(QtScrollAlwaysOff)
         else:
-            self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+            self.setVerticalScrollBarPolicy(QtScrollAsNeeded)
 
         if CONFIG.hideHScroll:
-            self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+            self.setHorizontalScrollBarPolicy(QtScrollAlwaysOff)
         else:
-            self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+            self.setHorizontalScrollBarPolicy(QtScrollAsNeeded)
 
         # Refresh the tab stops
         self.setTabStopDistance(CONFIG.getTabWidth())
@@ -207,8 +215,10 @@ class GuiDocViewer(QTextBrowser):
         sPos = self.verticalScrollBar().value()
         qDoc = ToQTextDocument(SHARED.project)
         qDoc.setJustify(CONFIG.doJustify)
-        qDoc.setDialogueHighlight(True)
-        qDoc.initDocument(CONFIG.textFont, self._docTheme)
+        qDoc.setDialogHighlight(True)
+        qDoc.setFont(CONFIG.textFont)
+        qDoc.setTheme(self._docTheme)
+        qDoc.initDocument()
         qDoc.setKeywords(True)
         qDoc.setComments(CONFIG.viewComments)
         qDoc.setSynopsis(CONFIG.viewSynopsis)
@@ -221,7 +231,7 @@ class GuiDocViewer(QTextBrowser):
             qDoc.doPreProcessing()
             qDoc.tokenizeText()
             qDoc.doConvert()
-            qDoc.appendFootnotes()
+            qDoc.closeDocument()
         except Exception:
             logger.error("Failed to generate preview for document with handle '%s'", tHandle)
             logException()
@@ -229,15 +239,13 @@ class GuiDocViewer(QTextBrowser):
             QApplication.restoreOverrideCursor()
             return False
 
-        # Refresh the tab stops
-        self.setTabStopDistance(CONFIG.getTabWidth())
-
-        # Must be before setHtml
+        # Must be before setDocument
         if updateHistory:
             self.docHistory.append(tHandle)
 
         self.setDocumentTitle(tHandle)
         self.setDocument(qDoc.document)
+        self.setTabStopDistance(CONFIG.getTabWidth())
 
         if self._docHandle == tHandle:
             # This is a refresh, so we set the scrollbar back to where it was
@@ -247,7 +255,7 @@ class GuiDocViewer(QTextBrowser):
         SHARED.project.data.setLastHandle(tHandle, "viewer")
         self.docHeader.setHandle(tHandle)
         self.docHeader.setOutline({
-            sTitle: (hItem.title, nwHeaders.H_LEVEL.get(hItem.level, 0))
+            sTitle: (hItem.title, nwStyles.H_LEVEL.get(hItem.level, 0))
             for sTitle, hItem in SHARED.project.index.iterItemHeadings(tHandle)
         })
         self.updateDocMargins()
@@ -374,8 +382,10 @@ class GuiDocViewer(QTextBrowser):
             logger.debug("Clicked link: '%s'", link)
             if (bits := link.partition("_")) and bits[0] == "#tag" and bits[2]:
                 self.loadDocumentTagRequest.emit(bits[2], nwDocMode.VIEW)
-            else:
+            elif link.startswith("#"):
                 self.navigateTo(link)
+            elif link.startswith("http"):
+                QDesktopServices.openUrl(QUrl(url))
         return
 
     @pyqtSlot("QPoint")
@@ -388,25 +398,25 @@ class GuiDocViewer(QTextBrowser):
 
         if userSelection:
             mnuCopy = QAction(self.tr("Copy"), ctxMenu)
-            mnuCopy.triggered.connect(lambda: self.docAction(nwDocAction.COPY))
+            mnuCopy.triggered.connect(qtLambda(self.docAction, nwDocAction.COPY))
             ctxMenu.addAction(mnuCopy)
 
             ctxMenu.addSeparator()
 
         mnuSelAll = QAction(self.tr("Select All"), ctxMenu)
-        mnuSelAll.triggered.connect(lambda: self.docAction(nwDocAction.SEL_ALL))
+        mnuSelAll.triggered.connect(qtLambda(self.docAction, nwDocAction.SEL_ALL))
         ctxMenu.addAction(mnuSelAll)
 
         mnuSelWord = QAction(self.tr("Select Word"), ctxMenu)
-        mnuSelWord.triggered.connect(
-            lambda: self._makePosSelection(QTextCursor.SelectionType.WordUnderCursor, point)
-        )
+        mnuSelWord.triggered.connect(qtLambda(
+            self._makePosSelection, QTextCursor.SelectionType.WordUnderCursor, point
+        ))
         ctxMenu.addAction(mnuSelWord)
 
         mnuSelPara = QAction(self.tr("Select Paragraph"), ctxMenu)
-        mnuSelPara.triggered.connect(
-            lambda: self._makePosSelection(QTextCursor.SelectionType.BlockUnderCursor, point)
-        )
+        mnuSelPara.triggered.connect(qtLambda(
+            self._makePosSelection, QTextCursor.SelectionType.BlockUnderCursor, point
+        ))
         ctxMenu.addAction(mnuSelPara)
 
         # Open the context menu
@@ -631,6 +641,11 @@ class GuiDocViewHeader(QWidget):
         self.forwardButton.setToolTip(self.tr("Go Forward"))
         self.forwardButton.clicked.connect(self.docViewer.navForward)
 
+        self.editButton = NIconToolButton(self, iSz)
+        self.editButton.setVisible(False)
+        self.editButton.setToolTip(self.tr("Open in Editor"))
+        self.editButton.clicked.connect(self._editDocument)
+
         self.refreshButton = NIconToolButton(self, iSz)
         self.refreshButton.setVisible(False)
         self.refreshButton.setToolTip(self.tr("Reload"))
@@ -649,7 +664,7 @@ class GuiDocViewHeader(QWidget):
         self.outerBox.addSpacing(mPx)
         self.outerBox.addWidget(self.itemTitle, 1)
         self.outerBox.addSpacing(mPx)
-        self.outerBox.addSpacing(iPx)
+        self.outerBox.addWidget(self.editButton, 0)
         self.outerBox.addWidget(self.refreshButton, 0)
         self.outerBox.addWidget(self.closeButton, 0)
         self.outerBox.setSpacing(0)
@@ -683,8 +698,9 @@ class GuiDocViewHeader(QWidget):
         self.outlineButton.setVisible(False)
         self.backButton.setVisible(False)
         self.forwardButton.setVisible(False)
-        self.closeButton.setVisible(False)
+        self.editButton.setVisible(False)
         self.refreshButton.setVisible(False)
+        self.closeButton.setVisible(False)
         return
 
     def setOutline(self, data: dict[str, tuple[str, int]]) -> None:
@@ -718,6 +734,7 @@ class GuiDocViewHeader(QWidget):
         self.outlineButton.setThemeIcon("list")
         self.backButton.setThemeIcon("backward")
         self.forwardButton.setThemeIcon("forward")
+        self.editButton.setThemeIcon("edit")
         self.refreshButton.setThemeIcon("refresh")
         self.closeButton.setThemeIcon("close")
 
@@ -725,6 +742,7 @@ class GuiDocViewHeader(QWidget):
         self.outlineButton.setStyleSheet(buttonStyle)
         self.backButton.setStyleSheet(buttonStyle)
         self.forwardButton.setStyleSheet(buttonStyle)
+        self.editButton.setStyleSheet(buttonStyle)
         self.refreshButton.setStyleSheet(buttonStyle)
         self.closeButton.setStyleSheet(buttonStyle)
 
@@ -767,8 +785,9 @@ class GuiDocViewHeader(QWidget):
         self.backButton.setVisible(True)
         self.forwardButton.setVisible(True)
         self.outlineButton.setVisible(True)
-        self.closeButton.setVisible(True)
+        self.editButton.setVisible(True)
         self.refreshButton.setVisible(True)
+        self.closeButton.setVisible(True)
 
         return
 
@@ -793,6 +812,13 @@ class GuiDocViewHeader(QWidget):
     def _refreshDocument(self) -> None:
         """Reload the content of the document."""
         self.docViewer.reloadDocumentRequest.emit()
+        return
+
+    @pyqtSlot()
+    def _editDocument(self) -> None:
+        """Open the document in the editor."""
+        if tHandle := self._docHandle:
+            self.docViewer.openDocumentRequest.emit(tHandle, nwDocMode.EDIT, "", True)
         return
 
     ##

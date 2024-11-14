@@ -137,6 +137,7 @@ class nwDocInsert(Enum):
     VSPACE_M  = 9
     LIPSUM    = 10
     FOOTNOTE  = 11
+    LINE_BRK  = 12
 
 
 class nwView(Enum):
@@ -157,35 +158,40 @@ class nwFocus(Enum):
 
 class nwOutline(Enum):
 
-    TITLE  = 0
-    LEVEL  = 1
-    LABEL  = 2
-    LINE   = 3
-    CCOUNT = 4
-    WCOUNT = 5
-    PCOUNT = 6
-    POV    = 7
-    FOCUS  = 8
-    CHAR   = 9
-    PLOT   = 10
-    TIME   = 11
-    WORLD  = 12
-    OBJECT = 13
-    ENTITY = 14
-    CUSTOM = 15
-    SYNOP  = 16
+    TITLE   = 0
+    LEVEL   = 1
+    LABEL   = 2
+    LINE    = 3
+    STATUS  = 4
+    CCOUNT  = 5
+    WCOUNT  = 6
+    PCOUNT  = 7
+    POV     = 8
+    FOCUS   = 9
+    CHAR    = 10
+    PLOT    = 11
+    TIME    = 12
+    WORLD   = 13
+    OBJECT  = 14
+    ENTITY  = 15
+    CUSTOM  = 16
+    STORY   = 17
+    MENTION = 18
+    SYNOP   = 19
 
 
 class nwBuildFmt(Enum):
 
     ODT    = 0
     FODT   = 1
-    HTML   = 2
-    NWD    = 3
-    STD_MD = 4
-    EXT_MD = 5
-    J_HTML = 6
-    J_NWD  = 7
+    DOCX   = 2
+    PDF    = 3
+    HTML   = 4
+    STD_MD = 5
+    EXT_MD = 6
+    NWD    = 7
+    J_HTML = 8
+    J_NWD  = 9
 
 
 class nwStatusShape(Enum):

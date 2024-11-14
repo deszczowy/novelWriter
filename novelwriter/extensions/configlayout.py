@@ -27,14 +27,14 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 """
 from __future__ import annotations
 
-from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QColor, QFont, QPalette
+from PyQt5.QtGui import QColor, QFont, QPalette, QPixmap
 from PyQt5.QtWidgets import (
     QAbstractButton, QFrame, QHBoxLayout, QLabel, QLayout, QScrollArea,
     QVBoxLayout, QWidget
 )
 
 from novelwriter import CONFIG
+from novelwriter.types import QtScrollAsNeeded
 
 DEFAULT_SCALE = 0.9
 
@@ -76,8 +76,8 @@ class NScrollablePage(QScrollArea):
         self._widget = QWidget(self)
         self.setWidget(self._widget)
         self.setWidgetResizable(True)
-        self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.setHorizontalScrollBarPolicy(QtScrollAsNeeded)
+        self.setVerticalScrollBarPolicy(QtScrollAsNeeded)
         self.setFrameShadow(QFrame.Shadow.Sunken)
         self.setFrameShape(QFrame.Shape.StyledPanel)
         return
@@ -113,8 +113,8 @@ class NScrollableForm(QScrollArea):
 
         self.setWidget(self._widget)
         self.setWidgetResizable(True)
-        self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.setHorizontalScrollBarPolicy(QtScrollAsNeeded)
+        self.setVerticalScrollBarPolicy(QtScrollAsNeeded)
         self.setFrameShadow(QFrame.Shadow.Sunken)
         self.setFrameShape(QFrame.Shape.StyledPanel)
 
@@ -180,9 +180,16 @@ class NScrollableForm(QScrollArea):
             self._sections[identifier] = qLabel
         return
 
-    def addRow(self, label: str, widget: QWidget | list[QWidget], helpText: str = "",
-               unit: str | None = None, button: QWidget | None = None, editable: str | None = None,
-               stretch: tuple[int, int] = (1, 0)) -> None:
+    def addRow(
+        self,
+        label: str | None,
+        widget: QWidget | list[QWidget | QPixmap | str | int],
+        helpText: str = "",
+        unit: str | None = None,
+        button: QWidget | None = None,
+        editable: str | None = None,
+        stretch: tuple[int, int] = (1, 0),
+    ) -> None:
         """Add a label and a widget as a new row of the form."""
         row = QHBoxLayout()
         row.setSpacing(CONFIG.pxInt(12))
@@ -191,13 +198,22 @@ class NScrollableForm(QScrollArea):
             wBox = QHBoxLayout()
             wBox.setContentsMargins(0, 0, 0, 0)
             for item in widget:
-                wBox.addWidget(item)
+                if isinstance(item, QWidget):
+                    wBox.addWidget(item)
+                elif isinstance(item, QPixmap):
+                    icon = QLabel(self)
+                    icon.setPixmap(item)
+                    wBox.addWidget(icon)
+                elif isinstance(item, str):
+                    wBox.addWidget(QLabel(item, self))
+                elif isinstance(item, int):
+                    wBox.addSpacing(CONFIG.pxInt(item))
             qWidget = QWidget(self)
             qWidget.setLayout(wBox)
         else:
             qWidget = widget
 
-        qLabel = QLabel(label, self)
+        qLabel = QLabel(label or "", self)
         qLabel.setIndent(self._indent)
         qLabel.setBuddy(qWidget)
 
@@ -230,7 +246,8 @@ class NScrollableForm(QScrollArea):
             row.addWidget(qWidget, stretch[1])
 
         self._layout.addLayout(row)
-        self._index[label.strip()] = qWidget
+        if label:
+            self._index[label.strip()] = qWidget
         self._first = False
 
         return

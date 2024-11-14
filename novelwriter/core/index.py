@@ -40,7 +40,7 @@ from novelwriter import SHARED
 from novelwriter.common import (
     checkInt, isHandle, isItemClass, isListInstance, isTitleTag, jsonEncode
 )
-from novelwriter.constants import nwFiles, nwHeaders, nwKeyWords
+from novelwriter.constants import nwFiles, nwKeyWords, nwStyles
 from novelwriter.enum import nwComment, nwItemClass, nwItemLayout, nwItemType
 from novelwriter.error import logException
 from novelwriter.text.counting import standardCounter
@@ -487,13 +487,14 @@ class NWIndex:
         if nBits == 0:
             return []
 
-        # Check that the key is valid
-        isGood[0] = tBits[0] in nwKeyWords.VALID_KEYS
+        # Check that the keyword is valid
+        kBit = tBits[0]
+        isGood[0] = kBit in nwKeyWords.VALID_KEYS
         if not isGood[0] or nBits == 1:
             return isGood
 
         # For a tag, only the first value is accepted, the rest are ignored
-        if tBits[0] == nwKeyWords.TAG_KEY and nBits > 1:
+        if kBit == nwKeyWords.TAG_KEY and nBits > 1:
             check, _ = self.parseValue(tBits[1])
             if check in self._tagsIndex:
                 isGood[1] = self._tagsIndex.tagHandle(check) == tHandle
@@ -501,12 +502,16 @@ class NWIndex:
                 isGood[1] = True
             return isGood
 
+        if kBit == nwKeyWords.MENTION_KEY and nBits > 1:
+            isGood[1:nBits] = [aBit in self._tagsIndex for aBit in tBits[1:nBits]]
+            return isGood
+
         # If we're still here, we check that the references exist
         # Class references cannot have the | symbol in them
-        refKey = nwKeyWords.KEY_CLASS[tBits[0]].name
-        for n in range(1, nBits):
-            if (aBit := tBits[n]) in self._tagsIndex:
-                isGood[n] = self._tagsIndex.tagClass(aBit) == refKey and "|" not in aBit
+        if rClass := nwKeyWords.KEY_CLASS.get(kBit):
+            for n in range(1, nBits):
+                if (aBit := tBits[n]) in self._tagsIndex:
+                    isGood[n] = self._tagsIndex.tagClass(aBit) == rClass.name and "|" not in aBit
 
         return isGood
 
@@ -569,7 +574,7 @@ class NWIndex:
         for _, _, hItem in self._itemIndex.iterNovelStructure(
             rHandle=rootHandle, activeOnly=activeOnly
         ):
-            iLevel = nwHeaders.H_LEVEL.get(hItem.level, 0)
+            iLevel = nwStyles.H_LEVEL.get(hItem.level, 0)
             hCount[iLevel] += 1
         return hCount
 
@@ -591,7 +596,7 @@ class NWIndex:
             rHandle=rHandle, activeOnly=activeOnly
         ):
             tKey = f"{tHandle}:{sTitle}"
-            iLevel = nwHeaders.H_LEVEL.get(hItem.level, 0)
+            iLevel = nwStyles.H_LEVEL.get(hItem.level, 0)
             if iLevel > maxDepth:
                 if pKey in tData:
                     tData[pKey]["words"] += hItem.wordCount
@@ -635,7 +640,7 @@ class NWIndex:
         """Extract all references made in a file, and optionally title
         section.
         """
-        tRefs = {x: [] for x in nwKeyWords.KEY_CLASS}
+        tRefs = {x: [] for x in nwKeyWords.VALID_KEYS}
         for rTitle, hItem in self._itemIndex.iterItemHeaders(tHandle):
             if sTitle is None or sTitle == rTitle:
                 for aTag, refTypes in hItem.references.items():
@@ -681,9 +686,10 @@ class NWIndex:
         """Return all tags used by a specific document."""
         return self._itemIndex.allItemTags(tHandle) if tHandle else []
 
-    def getClassTags(self, itemClass: nwItemClass) -> list[str]:
+    def getClassTags(self, itemClass: nwItemClass | None) -> list[str]:
         """Return all tags based on itemClass."""
-        return self._tagsIndex.filterTagNames(itemClass.name)
+        name = None if itemClass is None else itemClass.name
+        return self._tagsIndex.filterTagNames(name)
 
     def getTagsData(
         self, activeOnly: bool = True
@@ -780,11 +786,16 @@ class TagsIndex:
         """Get the class of a given tag."""
         return self._tags.get(tagKey.lower(), {}).get("class", None)
 
-    def filterTagNames(self, className: str) -> list[str]:
+    def filterTagNames(self, className: str | None) -> list[str]:
         """Get a list of tag names for a given class."""
-        return [
-            x.get("name", "") for x in self._tags.values() if x.get("class", "") == className
-        ]
+        if className is None:
+            return [
+                x.get("name", "") for x in self._tags.values()
+            ]
+        else:
+            return [
+                x.get("name", "") for x in self._tags.values() if x.get("class", "") == className
+            ]
 
     ##
     #  Pack/Unpack
@@ -1251,7 +1262,7 @@ class IndexHeading:
 
     def setLevel(self, level: str) -> None:
         """Set the level of the heading if it's a valid value."""
-        if level in nwHeaders.H_VALID:
+        if level in nwStyles.H_VALID:
             self._level = level
         return
 

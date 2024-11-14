@@ -29,6 +29,15 @@ documentation.
 * PyPi Project: [pypi.org/project/novelWriter](https://pypi.org/project/novelWriter)
 * Social Media: [fosstodon.org/@novelwriter](https://fosstodon.org/@novelwriter)
 
+## Sponsors
+
+<table style="border: none;">
+<tr>
+  <td><img align="left" style="height: 25px;" src="https://raw.githubusercontent.com/vkbo/novelWriter/main/setup/signpath_logo.png"></td>
+  <td>Free code signing on Windows provided by <a href="https://about.signpath.io/">SignPath.io</a>, certificate by <a href="https://signpath.org/">SignPath Foundation</a>.</td>
+</tr>
+</table>
+
 ## Implementation
 
 novelWriter is written with Python 3 (3.9+) using Qt5 and PyQt5 (5.15 only), and is released on

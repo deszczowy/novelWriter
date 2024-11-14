@@ -44,7 +44,7 @@ from novelwriter.dialogs.about import GuiAbout
 from novelwriter.dialogs.preferences import GuiPreferences
 from novelwriter.dialogs.projectsettings import GuiProjectSettings
 from novelwriter.dialogs.wordlist import GuiWordList
-from novelwriter.enum import nwDocAction, nwDocInsert, nwDocMode, nwFocus, nwItemType, nwView
+from novelwriter.enum import nwDocAction, nwDocInsert, nwDocMode, nwFocus, nwView
 from novelwriter.gui.doceditor import GuiDocEditor
 from novelwriter.gui.docviewer import GuiDocViewer
 from novelwriter.gui.docviewerpanel import GuiDocViewerPanel
@@ -189,9 +189,6 @@ class GuiMain(QMainWindow):
         self.splitView.setVisible(False)
         self.docEditor.closeSearch()
 
-        # Initialise the Project Tree
-        self.rebuildTrees()
-
         # Assemble Main Window Elements
         self.mainBox = QHBoxLayout()
         self.mainBox.addWidget(self.sideBar)
@@ -222,6 +219,8 @@ class GuiMain(QMainWindow):
         SHARED.projectStatusChanged.connect(self.mainStatus.updateProjectStatus)
         SHARED.projectStatusMessage.connect(self.mainStatus.setStatusMessage)
         SHARED.spellLanguageChanged.connect(self.mainStatus.setLanguage)
+        SHARED.statusLabelsChanged.connect(self.docViewerPanel.updateStatusLabels)
+        SHARED.statusLabelsChanged.connect(self.projView.refreshUserLabels)
 
         self.mainMenu.requestDocAction.connect(self._passDocumentAction)
         self.mainMenu.requestDocInsert.connect(self._passDocumentInsert)
@@ -250,11 +249,13 @@ class GuiMain(QMainWindow):
         self.projSearch.openDocumentSelectRequest.connect(self._openDocumentSelection)
         self.projSearch.selectedItemChanged.connect(self.itemDetails.updateViewBox)
 
-        self.docEditor.closeDocumentRequest.connect(self.closeDocEditor)
+        self.docEditor.closeEditorRequest.connect(self.closeDocEditor)
         self.docEditor.docCountsChanged.connect(self.itemDetails.updateCounts)
         self.docEditor.docCountsChanged.connect(self.projView.updateCounts)
         self.docEditor.docTextChanged.connect(self.projSearch.textChanged)
         self.docEditor.editedStatusChanged.connect(self.mainStatus.updateDocumentStatus)
+        self.docEditor.itemHandleChanged.connect(self.novelView.setActiveHandle)
+        self.docEditor.itemHandleChanged.connect(self.projView.setActiveHandle)
         self.docEditor.loadDocumentTagRequest.connect(self._followTag)
         self.docEditor.novelItemMetaChanged.connect(self.novelView.updateNovelItemMeta)
         self.docEditor.novelStructureChanged.connect(self.novelView.refreshTree)
@@ -263,12 +264,13 @@ class GuiMain(QMainWindow):
         self.docEditor.requestProjectItemRenamed.connect(self.projView.renameTreeItem)
         self.docEditor.requestProjectItemSelected.connect(self.projView.setSelectedHandle)
         self.docEditor.spellCheckStateChanged.connect(self.mainMenu.setSpellCheckState)
-        self.docEditor.statusMessage.connect(self.mainStatus.setStatusMessage)
         self.docEditor.toggleFocusModeRequest.connect(self.toggleFocusMode)
+        self.docEditor.updateStatusMessage.connect(self.mainStatus.setStatusMessage)
 
         self.docViewer.closeDocumentRequest.connect(self.closeDocViewer)
         self.docViewer.documentLoaded.connect(self.docViewerPanel.updateHandle)
         self.docViewer.loadDocumentTagRequest.connect(self._followTag)
+        self.docViewer.openDocumentRequest.connect(self._openDocument)
         self.docViewer.reloadDocumentRequest.connect(self._reloadViewer)
         self.docViewer.requestProjectItemSelected.connect(self.projView.setSelectedHandle)
         self.docViewer.togglePanelVisibility.connect(self._toggleViewerPanelVisibility)
@@ -290,19 +292,17 @@ class GuiMain(QMainWindow):
         self.asDocTimer = QTimer(self)
         self.asDocTimer.timeout.connect(self._autoSaveDocument)
 
-        # Shortcuts and Actions
-        self._connectMenuActions()
-
+        # Shortcuts
         self.keyReturn = QShortcut(self)
-        self.keyReturn.setKey(Qt.Key.Key_Return)
+        self.keyReturn.setKey("Return")
         self.keyReturn.activated.connect(self._keyPressReturn)
 
         self.keyEnter = QShortcut(self)
-        self.keyEnter.setKey(Qt.Key.Key_Enter)
+        self.keyEnter.setKey("Enter")
         self.keyEnter.activated.connect(self._keyPressReturn)
 
         self.keyEscape = QShortcut(self)
-        self.keyEscape.setKey(Qt.Key.Key_Escape)
+        self.keyEscape.setKey("Esc")
         self.keyEscape.activated.connect(self._keyPressEscape)
 
         # Initialise Main GUI
@@ -461,7 +461,6 @@ class GuiMain(QMainWindow):
 
         # Update GUI
         self._updateWindowTitle(SHARED.project.data.name)
-        self.rebuildTrees()
         self.docEditor.toggleSpellCheck(SHARED.project.data.spellCheck)
         self.mainStatus.setRefTime(SHARED.project.projOpened)
         self.projView.openProjectTasks()
@@ -483,8 +482,7 @@ class GuiMain(QMainWindow):
             QApplication.processEvents()
             self.openDocument(lastEdited, doScroll=True)
 
-        lastViewed = SHARED.project.data.getLastHandle("viewer")
-        if lastViewed is not None:
+        if lastViewed := SHARED.project.data.getLastHandle("viewer"):
             QApplication.processEvents()
             self.viewDocument(lastViewed)
 
@@ -514,7 +512,7 @@ class GuiMain(QMainWindow):
     #  Document Actions
     ##
 
-    def closeDocument(self, beforeOpen: bool = False) -> None:
+    def closeDocument(self) -> None:
         """Close the document and clear the editor and title field."""
         if SHARED.hasProject:
             # Disable focus mode if it is active
@@ -522,38 +520,37 @@ class GuiMain(QMainWindow):
                 SHARED.setFocusMode(False)
             self.saveDocument()
             self.docEditor.clearEditor()
-            if not beforeOpen:
-                self.novelView.setActiveHandle(None)
         return
 
-    def openDocument(self, tHandle: str | None, tLine: int | None = None,
-                     changeFocus: bool = True, doScroll: bool = False) -> bool:
+    def openDocument(
+        self,
+        tHandle: str | None,
+        tLine: int | None = None,
+        sTitle: str | None = None,
+        changeFocus: bool = True,
+        doScroll: bool = False
+    ) -> bool:
         """Open a specific document, optionally at a given line."""
-        if not SHARED.hasProject:
-            logger.error("No project open")
+        if not (SHARED.hasProject and tHandle):
+            logger.error("Nothing to open open")
             return False
 
-        if not tHandle or not SHARED.project.tree.checkType(tHandle, nwItemType.FILE):
-            logger.debug("Requested item '%s' is not a document", tHandle)
-            return False
+        if sTitle and tLine is None:
+            if hItem := SHARED.project.index.getItemHeading(tHandle, sTitle):
+                tLine = hItem.line
 
         self._changeView(nwView.EDITOR)
-        cHandle = self.docEditor.docHandle
-        if cHandle == tHandle:
+        if tHandle == self.docEditor.docHandle:
             self.docEditor.setCursorLine(tLine)
-            if changeFocus:
-                self.docEditor.setFocus()
-            return True
-
-        self.closeDocument(beforeOpen=True)
-        if self.docEditor.loadText(tHandle, tLine):
-            SHARED.project.data.setLastHandle(tHandle, "editor")
-            self.projView.setSelectedHandle(tHandle, doScroll=doScroll)
-            self.novelView.setActiveHandle(tHandle, doScroll=doScroll)
-            if changeFocus:
-                self.docEditor.setFocus()
         else:
-            return False
+            self.closeDocument()
+            if self.docEditor.loadText(tHandle, tLine):
+                self.projView.setSelectedHandle(tHandle, doScroll=doScroll)
+            else:
+                return False
+
+        if changeFocus:
+            self.docEditor.setFocus()
 
         return True
 
@@ -711,7 +708,6 @@ class GuiMain(QMainWindow):
         if SHARED.hasProject:
             tHandle = None
             sTitle = None
-            tLine = None
             if self.projView.treeHasFocus():
                 tHandle = self.projView.getSelectedHandle()
             elif self.novelView.treeHasFocus():
@@ -722,17 +718,9 @@ class GuiMain(QMainWindow):
                 logger.warning("No item selected")
                 return
 
-            if tHandle and sTitle:
-                if hItem := SHARED.project.index.getItemHeading(tHandle, sTitle):
-                    tLine = hItem.line
             if tHandle:
-                self.openDocument(tHandle, tLine=tLine, changeFocus=False, doScroll=False)
+                self.openDocument(tHandle, sTitle=sTitle, changeFocus=False, doScroll=False)
 
-        return
-
-    def rebuildTrees(self) -> None:
-        """Rebuild the project tree."""
-        self.projView.populateTree()
         return
 
     def rebuildIndex(self, beQuiet: bool = False) -> None:
@@ -857,13 +845,11 @@ class GuiMain(QMainWindow):
 
     def closeMain(self) -> bool:
         """Save everything, and close novelWriter."""
-        if SHARED.hasProject:
-            msgYes = SHARED.question("%s<br>%s" % (
-                self.tr("Do you want to exit novelWriter?"),
-                self.tr("Changes are saved automatically.")
-            ))
-            if not msgYes:
-                return False
+        if SHARED.hasProject and not SHARED.question("%s<br>%s" % (
+            self.tr("Do you want to exit novelWriter?"),
+            self.tr("Changes are saved automatically.")
+        )):
+            return False
 
         logger.info("Exiting novelWriter")
 
@@ -908,11 +894,6 @@ class GuiMain(QMainWindow):
 
         return not self.splitView.isVisible()
 
-    def toggleFullScreenMode(self) -> None:
-        """Toggle full screen mode"""
-        self.setWindowState(self.windowState() ^ Qt.WindowState.WindowFullScreen)
-        return
-
     ##
     #  Events
     ##
@@ -927,6 +908,12 @@ class GuiMain(QMainWindow):
     ##
     #  Public Slots
     ##
+
+    @pyqtSlot()
+    def toggleFullScreenMode(self) -> None:
+        """Toggle full screen mode"""
+        self.setWindowState(self.windowState() ^ Qt.WindowState.WindowFullScreen)
+        return
 
     @pyqtSlot()
     def closeDocEditor(self) -> None:
@@ -1093,15 +1080,13 @@ class GuiMain(QMainWindow):
 
         return
 
-    @pyqtSlot(bool)
-    def _processProjectSettingsChanges(self, rebuildTrees: bool) -> None:
+    @pyqtSlot()
+    def _processProjectSettingsChanges(self) -> None:
         """Refresh data dependent on project settings."""
         logger.debug("Applying new project settings")
         SHARED.updateSpellCheckLanguage()
         self.itemDetails.refreshDetails()
         self._updateWindowTitle(SHARED.project.data.name)
-        if rebuildTrees:
-            self.rebuildTrees()
         return
 
     @pyqtSlot()
@@ -1115,10 +1100,18 @@ class GuiMain(QMainWindow):
     @pyqtSlot(str, nwDocMode)
     def _followTag(self, tag: str, mode: nwDocMode) -> None:
         """Follow a tag after user interaction with a link."""
-        tHandle, sTitle = self._getTagSource(tag)
-        if tHandle is not None:
+        tHandle, sTitle = SHARED.project.index.getTagSource(tag)
+        if tHandle is None:
+            SHARED.error(self.tr(
+                "Could not find the reference for tag '{0}'. It either doesn't "
+                "exist, or the index is out of date. The index can be updated "
+                "from the Tools menu, or by pressing {1}."
+            ).format(
+                tag, "F9"
+            ))
+        else:
             if mode == nwDocMode.EDIT:
-                self.openDocument(tHandle)
+                self.openDocument(tHandle, sTitle=sTitle)
             elif mode == nwDocMode.VIEW:
                 self.viewDocument(tHandle=tHandle, sTitle=sTitle)
         return
@@ -1137,11 +1130,7 @@ class GuiMain(QMainWindow):
         """Handle an open document request."""
         if tHandle is not None:
             if mode == nwDocMode.EDIT:
-                tLine = None
-                hItem = SHARED.project.index.getItemHeading(tHandle, sTitle)
-                if hItem is not None:
-                    tLine = hItem.line
-                self.openDocument(tHandle, tLine=tLine, changeFocus=setFocus)
+                self.openDocument(tHandle, sTitle=sTitle, changeFocus=setFocus)
             elif mode == nwDocMode.VIEW:
                 self.viewDocument(tHandle=tHandle, sTitle=sTitle)
         return
@@ -1307,116 +1296,7 @@ class GuiMain(QMainWindow):
     #  Internal Functions
     ##
 
-    def _connectMenuActions(self) -> None:
-        """Connect to the main window all menu actions that need to be
-        available also when the main menu is hidden.
-        """
-        # Project
-        self.addAction(self.mainMenu.aSaveProject)
-        self.addAction(self.mainMenu.aEditItem)
-        self.addAction(self.mainMenu.aExitNW)
-
-        # Document
-        self.addAction(self.mainMenu.aSaveDoc)
-        self.addAction(self.mainMenu.aCloseDoc)
-
-        # Edit
-        self.addAction(self.mainMenu.aEditUndo)
-        self.addAction(self.mainMenu.aEditRedo)
-        self.addAction(self.mainMenu.aEditCut)
-        self.addAction(self.mainMenu.aEditCopy)
-        self.addAction(self.mainMenu.aEditPaste)
-        self.addAction(self.mainMenu.aSelectAll)
-        self.addAction(self.mainMenu.aSelectPar)
-
-        # View
-        self.addAction(self.mainMenu.aFocusMode)
-        self.addAction(self.mainMenu.aFullScreen)
-
-        # Insert
-        self.addAction(self.mainMenu.aInsENDash)
-        self.addAction(self.mainMenu.aInsEMDash)
-        self.addAction(self.mainMenu.aInsHorBar)
-        self.addAction(self.mainMenu.aInsFigDash)
-        self.addAction(self.mainMenu.aInsQuoteLS)
-        self.addAction(self.mainMenu.aInsQuoteRS)
-        self.addAction(self.mainMenu.aInsQuoteLD)
-        self.addAction(self.mainMenu.aInsQuoteRD)
-        self.addAction(self.mainMenu.aInsMSApos)
-        self.addAction(self.mainMenu.aInsEllipsis)
-        self.addAction(self.mainMenu.aInsPrime)
-        self.addAction(self.mainMenu.aInsDPrime)
-        self.addAction(self.mainMenu.aInsNBSpace)
-        self.addAction(self.mainMenu.aInsThinSpace)
-        self.addAction(self.mainMenu.aInsThinNBSpace)
-        self.addAction(self.mainMenu.aInsBullet)
-        self.addAction(self.mainMenu.aInsHyBull)
-        self.addAction(self.mainMenu.aInsFlower)
-        self.addAction(self.mainMenu.aInsPerMille)
-        self.addAction(self.mainMenu.aInsDegree)
-        self.addAction(self.mainMenu.aInsMinus)
-        self.addAction(self.mainMenu.aInsTimes)
-        self.addAction(self.mainMenu.aInsDivide)
-        self.addAction(self.mainMenu.aInsSynopsis)
-        self.addAction(self.mainMenu.aInsShort)
-
-        for mAction, _ in self.mainMenu.mInsKWItems.values():
-            self.addAction(mAction)
-
-        # Search
-        self.addAction(self.mainMenu.aFind)
-        self.addAction(self.mainMenu.aReplace)
-        self.addAction(self.mainMenu.aFindNext)
-        self.addAction(self.mainMenu.aFindPrev)
-        self.addAction(self.mainMenu.aReplaceNext)
-
-        # Format
-        self.addAction(self.mainMenu.aFmtItalic)
-        self.addAction(self.mainMenu.aFmtBold)
-        self.addAction(self.mainMenu.aFmtStrike)
-        self.addAction(self.mainMenu.aFmtDQuote)
-        self.addAction(self.mainMenu.aFmtSQuote)
-        self.addAction(self.mainMenu.aFmtHead1)
-        self.addAction(self.mainMenu.aFmtHead2)
-        self.addAction(self.mainMenu.aFmtHead3)
-        self.addAction(self.mainMenu.aFmtHead4)
-        self.addAction(self.mainMenu.aFmtAlignLeft)
-        self.addAction(self.mainMenu.aFmtAlignCentre)
-        self.addAction(self.mainMenu.aFmtAlignRight)
-        self.addAction(self.mainMenu.aFmtIndentLeft)
-        self.addAction(self.mainMenu.aFmtIndentRight)
-        self.addAction(self.mainMenu.aFmtComment)
-        self.addAction(self.mainMenu.aFmtNoFormat)
-
-        # Tools
-        self.addAction(self.mainMenu.aSpellCheck)
-        self.addAction(self.mainMenu.aReRunSpell)
-        self.addAction(self.mainMenu.aPreferences)
-
-        # Help
-        self.addAction(self.mainMenu.aHelpDocs)
-        if isinstance(CONFIG.pdfDocs, Path):
-            self.addAction(self.mainMenu.aPdfDocs)
-
-        return
-
     def _updateWindowTitle(self, projName: str | None = None) -> None:
         """Set the window title and add the project's name."""
         self.setWindowTitle(" - ".join(filter(None, [projName, CONFIG.appName])))
         return
-
-    def _getTagSource(self, tag: str) -> tuple[str | None, str | None]:
-        """Handle the index lookup of a tag and display an alert if the
-        tag cannot be found.
-        """
-        tHandle, sTitle = SHARED.project.index.getTagSource(tag)
-        if tHandle is None:
-            SHARED.error(self.tr(
-                "Could not find the reference for tag '{0}'. It either doesn't "
-                "exist, or the index is out of date. The index can be updated "
-                "from the Tools menu, or by pressing {1}."
-            ).format(
-                tag, "F9"
-            ))
-            return None, None
-        return tHandle, sTitle

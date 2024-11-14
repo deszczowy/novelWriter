@@ -1,5 +1,143 @@
 # novelWriter Changelog
 
+## Version 2.6 Beta 1 [2024-11-12]
+
+### Release Notes
+
+This is a beta release of the next release version, and is intended for testing purposes. Please be
+careful when using this version on live writing projects, and make sure you take frequent backups.
+
+### Detailed Changelog
+
+**New Features**
+
+* Added PDF build format. Issue #2046. PR #2048.
+* Added DocX (MS Word) format. Issue #1537. PR #2056.
+* The Build settings tool has the following changes: Ability to control page break and centring of
+  main titles, an option to disable styling for headings altogether, and the ODT section has been
+  generalised to apply to all document formats. Issue #2023. PR #2045.
+* Text and heading margin can now be control in the Manuscript Build tool. Issue #2023. PR #2051.
+* Word counts and other such statistics can now be inserted into the manuscript. This is done
+  through new insert actions in the Insert menu, and processed at build time. Issue #2024.
+  PR #2073.
+* Forced line breaks can now be inserted as a shortcode. This is useful when line breaks in
+  paragraphs are ignored when building the manuscript. Issue #1991. PR #2063.
+* A new `@mentions` keyword has been added that can list any tag in the project as being mentioned
+  in the current section. These are listed separately from tags present in the story section.
+  Issue #1822. PR #2064.
+* Tags in novel documents can now be referenced with the `@story` keyword. Issue #1990. PR #2072.
+* URLs starting with http/https are now recognised and clickable in the editor, viewer, and
+  manuscript preview. Issue #1426. PR #2067.
+* Added dialogue highlighting for Portuguese and Polish dialogue styles. Issues #2066 and #2070.
+  Related to #1773. PRs #2068, #2079, #2081 and #2082.
+* Four dashes in the editor are now replaced by a horizontal bar. This is useful as a replacement
+  symbol for em dash when using dialogue highlighting to avoid triggering it. The horizontal bar is
+  replaced with an em dash in the manuscript. Issue #2070. PR #2079.
+* Manuscript Build settings can now be duplicated. Issue #1931. PR #2084.
+* Page breaks can optionally be made visible in the Manuscript preview. PR #2086.
+* The document status label can now be selected in the Outline View. Issue #1909. PR #2088.
+* The document viewer now has an edit button to open the document in the editor. Issue #1963.
+  PR #2089.
+
+**User Interface**
+
+* The Manuscript Build settings have now been moved into a single scrollable page, using the same
+  layout as in Preferences. The heading and filtering pages are still separate forms, as they are
+  of a more complex nature. PR #2031.
+* The currently open document in the editor is now highlighted in the project tree, just like it is
+  in the novel view. Issue #1981. PR #2077.
+* The details panel in the Outline view is now resizable. PR #2078.
+
+**Improvements**
+
+* Add an option to ignore a word in the spell checker. An ignored word is ignored only for the
+  current writing session. PR #2030.
+* Word counts and other such statistics is now exported as custom variables to ODT files, and can
+  be inserted in the text in LibreOffice, and similar. Issue #2033. PR #2035.
+
+**Code Improvements**
+
+* Added Python 3.13 coverage to ensure the new Python release is supported. Issue #2040. PR #2044.
+* Preparation for Qt6: Clean up Qt enums. PR #2025.
+* Preparation for Qt6: Replace Qt regular expression tools with the internal Python re module for
+  markup processing and syntax highlighting. It is both slightly faster, and there are issues with
+  text encoding in at least some versions of Qt6 or PyQt6. PRs #2028 and #2043.
+* Preparation for Qt6: Added a wrapper function for connecting signals to slots that has a
+  different function signature. Python lambdas generate warnings inn Qt6. PR #2075.
+* Refactored manuscript formats and moved most of the processing to the Tokenizer class to simplify
+  the format classes and also make them more consistent. PRs #2060, #2061 and #2062.
+* The document builder has been refactored to support more generalised format classes. PR #2047.
+* Action parent assignment has been rafactored in the main menu. #2075.
+* Raw text format output has been refactored and reduced to just appending documents. PR #2087.
+
+----
+
+## Version 2.5.2 [2024-09-17]
+
+### Release Notes
+
+This is a patch release that fixes a series of issues mostly affecting dialogue highlighting in the
+document viewer. The way the text is formatted in the viewer changed a lot in 2.5, and there were a
+few issues with the new implementation. The tab stop distance setting was also ignored, but has now
+been fixed as well.
+
+### Detailed Changelog
+
+**Bugfixes**
+
+* Fixed an issue where the tab stop distance setting was being ignored in the document viewer. It
+  must be set again every time a document is loaded. Issue #1996. PR #2014.
+* Fixed an issue with overlapping formatting markers when processing text into new formats. This
+  issues was introduced when dialogue highlighting was added to the document viewer and manuscript
+  build. It arises because start and end of dialogue can occur on the same character as other
+  formatting, and then the order these markers are processed matters. This was not properly handled
+  in the code. Issue #2012. PR #2014.
+* Dialogue highlighting is now only applied to plain text paragraphs, not comments, headings, and
+  other places where there should be no dialogue. Issue #2013. PR #2014.
+* Note documents no longer get dialogue highlighting. Issue #2011. PR #2014.
+
+**Documentation**
+
+* Added a section about spell checking in the documentation. PR #2015.
+
+----
+
+## Version 2.5.1 [2024-07-28]
+
+### Release Notes
+
+This is a patch release that fixes an issue with the lock file being left in the project when the
+project open is cancelled, a few issues with custom input boxes in Preferences, and a usability
+issue when selecting to edit a tag or reference from the Tags and References panel as well as fixed
+an issue with the Importance labels not being updated in the tabs for tags.
+
+### Detailed Changelog
+
+**Bugfixes**
+
+* Fixes an issue where the project lock file was created before certain checks where the user could
+  cancel the project open process, leaving a lock file in the project folder behind. Issue #1977.
+  PR #1978.
+* Fixes an issue where the user could add spaces to the pad before and after Preference settings,
+  which would pad every space entered into the text. The Preferences settings no longer accept any
+  white spaces in these boxes (they are removed on save) and also strips duplicate character
+  entries. Issue #1985. PR #1986.
+* The narrator break and dialog symbol Preference text boxes will now be cleared if the settings is
+  a white space. PR #1986.
+* Fixed an issue where Importance labels were not updated in the viewer panel's tags tabs when they
+  where changed in Project Settings. Issue #1992. PR #1993.
+
+**Usability**
+
+* When selecting to edit a tag or reference from the panel below the Document Viewer, the editor
+  now scrolls to the relevant heading as it does in the viewer. Issue #1983. PR #1987.
+
+**Internationalisation**
+
+* Latin American Spanish translation updated by Tommy Marplatt (@tmarplatt). PR #1989.
+
+----
+
 ## Version 2.5 [2024-07-10]
 
 ### Release Notes
