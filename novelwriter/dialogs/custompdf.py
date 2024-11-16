@@ -58,6 +58,7 @@ class CustomPDFOptions:
     def __init__(self) -> None:
         self.IsPortrait = False
         self.RatioPercent = 50
+        self.createDictionaries()
         self.LineSpacing = 0.8
         self.FontSize = 9
         self.ParagraphSpacing = 0.8
@@ -69,6 +70,32 @@ class CustomPDFOptions:
         pdfPath = CONFIG.tempPath("custompdf")
         pdfPath.mkdir(exist_ok=True)
         self.FileName = os.path.join(pdfPath, self.FileName)
+
+    def createDictionaries(self) -> None:
+        self.values = {
+            "ls" : {
+                0 : ["0.5", 0.5, 0],
+                1 : ["0.8", 0.8, 1],
+                2 : ["1", 1.0, 0],
+                3 : ["1.5", 1.5, 0],
+                4 : ["2", 2.0, 0]
+            },
+            "ps" : {
+                0 : ["0.8", 0.8, 0],
+                1 : ["1", 1.0, 1],
+                2 : ["1.5", 1.5, 0],
+                3 : ["2", 2.0, 0]
+            },
+            "fs" : {
+                0 : ["6", 6.0, 1],
+                1 : ["8", 8.0, 0],
+                2 : ["9", 9.0, 0],
+                3 : ["10", 10.0, 0],
+                4 : ["11", 11.0, 0],
+                5 : ["12", 12.0, 0],
+                6 : ["14", 14.0, 0]
+            }
+        }
 
 
 class GuiCustomPDF(NDialog):
@@ -134,6 +161,18 @@ class GuiCustomPDF(NDialog):
         else:
             print("PDF Error: something bad happened.")
 
+    def _fillComboBox(self, combo, values):
+        print(values)
+        default = 0
+        for i in values:
+            v = values[i]
+            print(v)
+            if v[2] == 1:
+                default = i
+                print(f"default {i}, {v}")
+            combo.addItem(v[0], v)
+        combo.setCurrentIndex(default)
+
     def _buildOptions(self) -> QVBoxLayout:
         layout = QVBoxLayout()
 
@@ -155,17 +194,11 @@ class GuiCustomPDF(NDialog):
         orientationGroup.idClicked.connect(self._orientationChanged)
 
         fontSizeLabel = QLabel("Font size")
-        fontSizeCombo = QComboBox(self)
-        fontSizeCombo.addItem("6")
-        fontSizeCombo.addItem("8")
-        fontSizeCombo.addItem("9")
-        fontSizeCombo.addItem("10")
-        fontSizeCombo.addItem("11")
-        fontSizeCombo.addItem("12")
-        fontSizeCombo.addItem("14")
-        fontSizeCombo.activated[str].connect(
+        self.fontSizeCombo = QComboBox(self)
+        self.fontSizeCombo.currentIndexChanged.connect(
             self._fontSizeChange
         )
+        self._fillComboBox(self.fontSizeCombo, self.settings.values["fs"])
 
         lineSpacingLabel = QLabel("Line spacing")
         lineSpacingCombo = QComboBox(self)
@@ -194,7 +227,7 @@ class GuiCustomPDF(NDialog):
         layout.addWidget(orientationPortrait)
         layout.addWidget(orientationLandscape)
         layout.addWidget(fontSizeLabel)
-        layout.addWidget(fontSizeCombo)
+        layout.addWidget(self.fontSizeCombo)
         layout.addWidget(lineSpacingLabel)
         layout.addWidget(lineSpacingCombo)
         layout.addWidget(paragraphSpacingLabel)
@@ -233,8 +266,9 @@ class GuiCustomPDF(NDialog):
         self.settings.IsPortrait = id == 1
         self.preview.updateOrientation(self.settings.IsPortrait)
 
-    def _fontSizeChange(self, value: str) -> None:
-        self.settings.FontSize = float(value)
+    def _fontSizeChange(self, index: int) -> None:
+        data = self.fontSizeCombo.itemData(index)        
+        self.settings.FontSize = data[1]
 
     def _lineSpacingChange(self, value: str) -> None:
         self.settings.LineSpacing = float(value)
