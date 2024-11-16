@@ -59,6 +59,7 @@ class CustomPDFOptions:
         self.IsPortrait = False
         self.RatioPercent = 50
         self.LineSpacing = 0.8
+        self.FontSize = 9
         self.ParagraphSpacing = 0.8
         self.drawFileName()
         self.DocumentName = ""
@@ -153,8 +154,22 @@ class GuiCustomPDF(NDialog):
         orientationLandscape.setChecked(self.settings.IsPortrait is False)
         orientationGroup.idClicked.connect(self._orientationChanged)
 
+        fontSizeLabel = QLabel("Font size")
+        fontSizeCombo = QComboBox(self)
+        fontSizeCombo.addItem("6")
+        fontSizeCombo.addItem("8")
+        fontSizeCombo.addItem("9")
+        fontSizeCombo.addItem("10")
+        fontSizeCombo.addItem("11")
+        fontSizeCombo.addItem("12")
+        fontSizeCombo.addItem("14")
+        fontSizeCombo.activated[str].connect(
+            self._fontSizeChange
+        )
+
         lineSpacingLabel = QLabel("Line spacing")
         lineSpacingCombo = QComboBox(self)
+        lineSpacingCombo.addItem("0.5")
         lineSpacingCombo.addItem("0.8")
         lineSpacingCombo.addItem("1")
         lineSpacingCombo.addItem("1.5")
@@ -178,6 +193,8 @@ class GuiCustomPDF(NDialog):
         layout.addWidget(orientationLabel)
         layout.addWidget(orientationPortrait)
         layout.addWidget(orientationLandscape)
+        layout.addWidget(fontSizeLabel)
+        layout.addWidget(fontSizeCombo)
         layout.addWidget(lineSpacingLabel)
         layout.addWidget(lineSpacingCombo)
         layout.addWidget(paragraphSpacingLabel)
@@ -215,6 +232,9 @@ class GuiCustomPDF(NDialog):
     def _orientationChanged(self, id: int) -> None:
         self.settings.IsPortrait = id == 1
         self.preview.updateOrientation(self.settings.IsPortrait)
+
+    def _fontSizeChange(self, value: str) -> None:
+        self.settings.FontSize = float(value)
 
     def _lineSpacingChange(self, value: str) -> None:
         self.settings.LineSpacing = float(value)
@@ -392,6 +412,9 @@ class PDFCreator(FPDF):
         self.columnWidth = 210  # a4
         self.chapterCounter = 0
         self.contents = []
+        self.mainFontSize = 10
+        self.headerFontSize = 12
+        self.lineHeight = 6
 
     def _calculate(self, settings: CustomPDFOptions) -> None:
         if settings.IsPortrait is False:
@@ -400,6 +423,11 @@ class PDFCreator(FPDF):
 
         self.columnWidth -= self.margin * 2
         self.columnWidth = (self.columnWidth * settings.RatioPercent) / 100
+
+        self.mainFontSize = settings.FontSize
+        self.headerFontSize = int(self.mainFontSize * 1.20)
+
+        self.lineHeight = self.mainFontSize * settings.LineSpacing
 
     def _startup(self) -> None:
         self.set_title("")
@@ -446,17 +474,16 @@ class PDFCreator(FPDF):
             self._printChapter(entry[0], entry[1])
 
     def _printChapterTitle(self, label: str) -> None:
-        print(self.columnWidth)
         caption = f"Chapter {self.chapterCounter}"
         if len(label) > 0:
             caption += f": {label}"
 
         self.set_title(label)
 
-        self.set_font("notable-font", "B", 12)
+        self.set_font("notable-font", "B", self.headerFontSize)
         self.multi_cell(
             self.columnWidth,
-            6,
+            self.lineHeight,
             caption,
             new_x="LMARGIN",
             new_y="NEXT",
@@ -466,8 +493,8 @@ class PDFCreator(FPDF):
         self.ln(4)
 
     def _printChapterBody(self, text: str) -> None:
-        self.set_font("notable-font", "", size=10)
-        self.multi_cell(self.columnWidth, 6, text)
+        self.set_font("notable-font", "", size=self.mainFontSize)
+        self.multi_cell(self.columnWidth, self.lineHeight, text)
         self.ln()
 
     def _printChapter(self, title: str, text: str) -> None:
