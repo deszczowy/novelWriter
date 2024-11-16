@@ -201,25 +201,18 @@ class GuiCustomPDF(NDialog):
         self._fillComboBox(self.fontSizeCombo, self.settings.values["fs"])
 
         lineSpacingLabel = QLabel("Line spacing")
-        lineSpacingCombo = QComboBox(self)
-        lineSpacingCombo.addItem("0.5")
-        lineSpacingCombo.addItem("0.8")
-        lineSpacingCombo.addItem("1")
-        lineSpacingCombo.addItem("1.5")
-        lineSpacingCombo.addItem("2")
-        lineSpacingCombo.activated[str].connect(
+        self.lineSpacingCombo = QComboBox(self)
+        self.lineSpacingCombo.currentIndexChanged.connect(
             self._lineSpacingChange
         )
+        self._fillComboBox(self.lineSpacingCombo, self.settings.values["ls"])
 
         paragraphSpacingLabel = QLabel("Paragraph spacing")
-        paragraphSpacingCombo = QComboBox(self)
-        paragraphSpacingCombo.addItem("0.8")
-        paragraphSpacingCombo.addItem("1")
-        paragraphSpacingCombo.addItem("1.5")
-        paragraphSpacingCombo.addItem("2")
-        paragraphSpacingCombo.activated[str].connect(
+        self.paragraphSpacingCombo = QComboBox(self)
+        self.paragraphSpacingCombo.activated[str].connect(
             self._paragraphSpacingChange
         )
+        self._fillComboBox(self.paragraphSpacingCombo, self.settings.values["ps"])
 
         layout.addWidget(percentLabel)
         layout.addWidget(percentField)
@@ -229,9 +222,9 @@ class GuiCustomPDF(NDialog):
         layout.addWidget(fontSizeLabel)
         layout.addWidget(self.fontSizeCombo)
         layout.addWidget(lineSpacingLabel)
-        layout.addWidget(lineSpacingCombo)
+        layout.addWidget(self.lineSpacingCombo)
         layout.addWidget(paragraphSpacingLabel)
-        layout.addWidget(paragraphSpacingCombo)
+        layout.addWidget(self.paragraphSpacingCombo)
         layout.addStretch()
 
         return layout
@@ -270,11 +263,13 @@ class GuiCustomPDF(NDialog):
         data = self.fontSizeCombo.itemData(index)        
         self.settings.FontSize = data[1]
 
-    def _lineSpacingChange(self, value: str) -> None:
-        self.settings.LineSpacing = float(value)
+    def _lineSpacingChange(self, index: int) -> None:
+        data = self.lineSpacingCombo.itemData(index)
+        self.settings.LineSpacing = data[1]
 
-    def _paragraphSpacingChange(self, value: str) -> None:
-        self.settings.ParagraphSpacing = float(value)
+    def _paragraphSpacingChange(self, index: int) -> None:
+        data = self.paragraphSpacingCombo.itemData(index)
+        self.settings.ParagraphSpacing = data[1]
 
     def _getRatio(self, value: float) -> float:
         return value / 100
