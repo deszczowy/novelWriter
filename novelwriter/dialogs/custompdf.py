@@ -48,7 +48,6 @@ from novelwriter.types import QtDialogClose, QtDialogOk
 
 logger = logging.getLogger(__name__)
 
-# slownik na spacingi
 # rodzaj fontu szeryf, bezszeryf, mono
 # czy otworzyc, czy zapisac do pliku
 
@@ -81,10 +80,13 @@ class CustomPDFOptions:
                 4 : ["2", 2.0, 0]
             },
             "ps" : {
-                0 : ["0.8", 0.8, 0],
-                1 : ["1", 1.0, 1],
-                2 : ["1.5", 1.5, 0],
-                3 : ["2", 2.0, 0]
+                0 : ["0.5", 0.5, 0],
+                1 : ["0.8", 0.8, 0],
+                2 : ["1", 1.0, 1],
+                3 : ["1.5", 1.5, 0],
+                4 : ["2", 2.0, 0],
+                5 : ["3", 3.0, 0],
+                6 : ["4", 4.0, 0]
             },
             "fs" : {
                 0 : ["6", 6.0, 1],
@@ -209,7 +211,7 @@ class GuiCustomPDF(NDialog):
 
         paragraphSpacingLabel = QLabel("Paragraph spacing")
         self.paragraphSpacingCombo = QComboBox(self)
-        self.paragraphSpacingCombo.activated[str].connect(
+        self.paragraphSpacingCombo.currentIndexChanged.connect(
             self._paragraphSpacingChange
         )
         self._fillComboBox(self.paragraphSpacingCombo, self.settings.values["ps"])
@@ -457,6 +459,7 @@ class PDFCreator(FPDF):
         self.headerFontSize = int(self.mainFontSize * 1.20)
 
         self.lineHeight = self.mainFontSize * settings.LineSpacing
+        self.paragraphSpacing = settings.ParagraphSpacing
 
     def _startup(self) -> None:
         self.set_title("")
@@ -522,9 +525,11 @@ class PDFCreator(FPDF):
         self.ln(4)
 
     def _printChapterBody(self, text: str) -> None:
+        paragraphs = text.splitlines()
         self.set_font("notable-font", "", size=self.mainFontSize)
-        self.multi_cell(self.columnWidth, self.lineHeight, text)
-        self.ln()
+        for p in paragraphs:
+            self.multi_cell(self.columnWidth, self.lineHeight, p)
+            self.ln(self.paragraphSpacing)
 
     def _printChapter(self, title: str, text: str) -> None:
         if len(text) > 0:
