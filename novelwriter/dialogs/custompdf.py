@@ -416,8 +416,6 @@ class CustomPDFCLientPreview(QWidget):
 
 class PDFCreator(FPDF):
 
-    # sekcje
-    # sekcje widoczne i niewidoczne (#!)
     def __init__(self, text: str, settings: CustomPDFOptions) -> None:
         super().__init__()
 
@@ -473,6 +471,27 @@ class PDFCreator(FPDF):
             format="A4",
             same=False
         )
+    
+    def _extractName(self, name: str) -> str:
+        i = 0
+        n = len(name)
+        regular = True
+
+        if n == 0:
+            return [ name, False ]
+        
+        while True:
+            c = name[i]
+            if c != "#":
+                if c == "!":
+                    regular = False
+                    i += 1
+                return [ name[i:].strip(), regular ]
+            i += 1
+
+            if i >= n:
+                break
+        return [ name, True ]
 
     def _processText(self, text: str) -> None:
         currentName = ""
@@ -481,7 +500,8 @@ class PDFCreator(FPDF):
         for paragragraph in text.splitlines():
             line = paragragraph.strip()
             if line.startswith("#"):
-                self._addContents(currentName, currentContent)
+                data = self._extractName(currentName)
+                self._addContents(data[0], currentContent, data[1])
                 currentName = line
                 currentContent = ""
             else:
@@ -489,26 +509,27 @@ class PDFCreator(FPDF):
                     currentContent += "\n" + line
 
         if len(currentName) > 0 or len(currentContent) > 0:
-            self._addContents(currentName, currentContent)
+            data = self._extractName(currentName)
+            self._addContents(data[0], currentContent, data[1])
 
-    def _addContents(self, label: str, content: str) -> None:
+    def _addContents(self, label: str, content: str, isRegular: bool) -> None:
         entryLabel = label.strip()
         entryContent = content.strip()
 
         if len(entryLabel) == 0 and len(entryContent) == 0:
             return
 
-        entry = [entryLabel, entryContent]
+        entry = [entryLabel, entryContent, isRegular]
         self.contents.append(entry)
 
     def _printout(self) -> None:
         for entry in self.contents:
-            self._printChapter(entry[0], entry[1])
+            self._printChapter(entry[0], entry[1], entry[2])
 
-    def _printChapterTitle(self, label: str) -> None:
-        caption = f"Chapter {self.chapterCounter}"
+    def _printChapterTitle(self, label: str, isRegular: bool) -> None:
+        caption = f"Chapter {self.chapterCounter}" if isRegular else ""
         if len(label) > 0:
-            caption += f": {label}"
+            caption += f": {label}" if isRegular else label
 
         self.set_title(label)
 
@@ -531,10 +552,11 @@ class PDFCreator(FPDF):
             self.multi_cell(self.columnWidth, self.lineHeight, p)
             self.ln(self.paragraphSpacing)
 
-    def _printChapter(self, title: str, text: str) -> None:
+    def _printChapter(self, title: str, text: str, isRegular: bool) -> None:
         if len(text) > 0:
-            self.chapterCounter += 1
-            self._printChapterTitle(title)
+            if isRegular:
+                self.chapterCounter += 1
+            self._printChapterTitle(title, isRegular)
             self._printChapterBody(text)
 
     # override
