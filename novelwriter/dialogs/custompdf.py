@@ -59,6 +59,7 @@ class CustomPDFOptions:
         self.RatioPercent = 50
         self.createDictionaries()
         self.LineSpacing = 0.8
+        self.FontType = "S"
         self.FontSize = 9
         self.ParagraphSpacing = 0.8
         self.drawFileName()
@@ -96,6 +97,11 @@ class CustomPDFOptions:
                 4 : ["11", 11.0, 0],
                 5 : ["12", 12.0, 0],
                 6 : ["14", 14.0, 0]
+            },
+            "ft" : {
+                0 : ["Typewriter", "M", 0],
+                1 : ["Sans", "S", 1],
+                2 : ["Serif", "D", 0]
             }
         }
 
@@ -155,7 +161,6 @@ class GuiCustomPDF(NDialog):
         pdf = PDFCreator(self.content, self.settings)
         close = False
         if pdf.completed():
-            # sp = subprocess.Popen([self.settings.FileName],shell=True)
             close = subprocess.call(["xdg-open", self.settings.FileName]) == 0
 
         if close:
@@ -164,14 +169,11 @@ class GuiCustomPDF(NDialog):
             print("PDF Error: something bad happened.")
 
     def _fillComboBox(self, combo, values):
-        print(values)
         default = 0
         for i in values:
             v = values[i]
-            print(v)
             if v[2] == 1:
                 default = i
-                print(f"default {i}, {v}")
             combo.addItem(v[0], v)
         combo.setCurrentIndex(default)
 
@@ -194,6 +196,13 @@ class GuiCustomPDF(NDialog):
         orientationPortrait.setChecked(self.settings.IsPortrait is True)
         orientationLandscape.setChecked(self.settings.IsPortrait is False)
         orientationGroup.idClicked.connect(self._orientationChanged)
+
+        fontTypeLabel = QLabel("Font type")
+        self.fontTypeCombo = QComboBox(self)
+        self.fontTypeCombo.currentIndexChanged.connect(
+            self._fontTypeChange
+        )
+        self._fillComboBox(self.fontTypeCombo, self.settings.values["ft"])
 
         fontSizeLabel = QLabel("Font size")
         self.fontSizeCombo = QComboBox(self)
@@ -221,6 +230,8 @@ class GuiCustomPDF(NDialog):
         layout.addWidget(orientationLabel)
         layout.addWidget(orientationPortrait)
         layout.addWidget(orientationLandscape)
+        layout.addWidget(fontTypeLabel)
+        layout.addWidget(self.fontTypeCombo)
         layout.addWidget(fontSizeLabel)
         layout.addWidget(self.fontSizeCombo)
         layout.addWidget(lineSpacingLabel)
@@ -260,6 +271,10 @@ class GuiCustomPDF(NDialog):
     def _orientationChanged(self, id: int) -> None:
         self.settings.IsPortrait = id == 1
         self.preview.updateOrientation(self.settings.IsPortrait)
+
+    def _fontTypeChange(self, index: int) -> None:
+        data = self.fontTypeCombo.itemData(index)        
+        self.settings.FontType = data[1]
 
     def _fontSizeChange(self, index: int) -> None:
         data = self.fontSizeCombo.itemData(index)        
@@ -412,7 +427,6 @@ class CustomPDFCLientPreview(QWidget):
         self._setPixmap()
 
 #######
-
 
 class PDFCreator(FPDF):
 
