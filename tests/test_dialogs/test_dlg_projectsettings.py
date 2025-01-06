@@ -3,7 +3,7 @@ novelWriter – Project Settings Dialog Class Tester
 ==================================================
 
 This file is a part of novelWriter
-Copyright 2018–2024, Veronica Berglyd Olsen
+Copyright (C) 2020 Veronica Berglyd Olsen and novelWriter contributors
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -23,7 +23,7 @@ from __future__ import annotations
 import pytest
 
 from PyQt5.QtGui import QColor
-from PyQt5.QtWidgets import QAction, QColorDialog
+from PyQt5.QtWidgets import QAction, QColorDialog, QFileDialog
 
 from novelwriter import CONFIG, SHARED
 from novelwriter.dialogs.editlabel import GuiEditLabel
@@ -31,6 +31,7 @@ from novelwriter.dialogs.projectsettings import GuiProjectSettings
 from novelwriter.enum import nwItemType, nwStatusShape
 from novelwriter.types import QtAccepted, QtMouseLeft
 
+from tests.mocked import causeOSError
 from tests.tools import C, buildTestProject
 
 KEY_DELAY = 1
@@ -161,7 +162,7 @@ def testDlgProjSettings_StatusImport(qtbot, monkeypatch, nwGUI, projPath, mockRn
     project.tree[hCharNote].setImport(C.iMajor)  # type: ignore
     project.tree[hWorldNote].setImport(C.iMain)  # type: ignore
 
-    nwGUI.projView.populateTree()
+    project.tree.refreshAllItems()
     project.countStatus()
 
     assert [e.count for _, e in project.data.itemStatus.iterItems()] == [2, 0, 2, 1]
@@ -198,10 +199,9 @@ def testDlgProjSettings_StatusImport(qtbot, monkeypatch, nwGUI, projPath, mockRn
         mp.setattr(QColorDialog, "getColor", lambda *a: QColor(20, 30, 40))
         status.addButton.click()
         status.listBox.setCurrentItem(status.listBox.topLevelItem(3))
-        status.editName.setText("Final")
+        status._onNameEdit("Final")
         status.colorButton.click()
         status._selectShape(nwStatusShape.CIRCLE)
-        status.applyButton.click()
         assert status.listBox.topLevelItemCount() == 4
 
     assert status.changed is True
@@ -274,10 +274,9 @@ def testDlgProjSettings_StatusImport(qtbot, monkeypatch, nwGUI, projPath, mockRn
         importance.addButton.click()
         importance.listBox.clearSelection()
         importance.listBox.setCurrentItem(importance.listBox.topLevelItem(3))
-        importance.editName.setText("Final")
+        importance._onNameEdit("Final")
         importance.colorButton.click()
         importance._selectShape(nwStatusShape.TRIANGLE)
-        importance.applyButton.click()
         assert importance.listBox.topLevelItemCount() == 4
 
     assert importance.changed is True
@@ -322,6 +321,75 @@ def testDlgProjSettings_StatusImport(qtbot, monkeypatch, nwGUI, projPath, mockRn
 
 
 @pytest.mark.gui
+def testDlgProjSettings_StatusImportExport(qtbot, monkeypatch, nwGUI, projPath, mockRnd):
+    """Test the status and importance import/export."""
+    buildTestProject(nwGUI, projPath)
+
+    # Create Dialog
+    projSettings = GuiProjectSettings(nwGUI, GuiProjectSettings.PAGE_STATUS)
+    projSettings.show()
+    qtbot.addWidget(projSettings)
+
+    status = projSettings.statusPage
+    assert status.listBox.topLevelItemCount() == 4
+    expFile = projPath / "status.csv"
+
+    # Export Error
+    with monkeypatch.context() as mp:
+        mp.setattr(QFileDialog, "getSaveFileName", lambda *a, **k: (str(expFile), ""))
+        mp.setattr("builtins.open", causeOSError)
+        status._exportLabels()
+
+    assert expFile.is_file() is False
+
+    # Export File
+    with monkeypatch.context() as mp:
+        mp.setattr(QFileDialog, "getSaveFileName", lambda *a, **k: (str(expFile), ""))
+        status._exportLabels()
+
+    assert expFile.is_file() is True
+    assert expFile.read_text().split() == [
+        "SQUARE,#646464,New",
+        "SQUARE,#c83200,Note",
+        "SQUARE,#c89600,Draft",
+        "SQUARE,#32c800,Finished",
+    ]
+
+    # Import Error
+    with monkeypatch.context() as mp:
+        mp.setattr(QFileDialog, "getOpenFileName", lambda *a, **k: (str(expFile), ""))
+        mp.setattr("builtins.open", causeOSError)
+        status._importLabels()
+
+    assert status.listBox.topLevelItemCount() == 4
+    assert status.changed is False
+
+    # Import File
+    with monkeypatch.context() as mp:
+        mp.setattr(QFileDialog, "getOpenFileName", lambda *a, **k: (str(expFile), ""))
+        status._importLabels()
+
+    assert status.listBox.topLevelItemCount() == 8
+    assert status.changed is True
+
+    item4 = status.listBox.topLevelItem(4)
+    assert item4 is not None
+    assert item4.text(0) == "New"
+
+    item5 = status.listBox.topLevelItem(5)
+    assert item5 is not None
+    assert item5.text(0) == "Note"
+
+    item6 = status.listBox.topLevelItem(6)
+    assert item6 is not None
+    assert item6.text(0) == "Draft"
+
+    item7 = status.listBox.topLevelItem(7)
+    assert item7 is not None
+    assert item7.text(0) == "Finished"
+
+
+@pytest.mark.gui
 def testDlgProjSettings_Replace(qtbot, monkeypatch, nwGUI, projPath, mockRnd):
     """Test the auto-replace page of the dialog."""
     monkeypatch.setattr(GuiEditLabel, "getLabel", lambda *a, text: (text, True))
@@ -351,8 +419,7 @@ def testDlgProjSettings_Replace(qtbot, monkeypatch, nwGUI, projPath, mockRnd):
 
     # Nothing to save or delete
     replace.listBox.clearSelection()
-    replace._applyChanges()
-    replace._delEntry()
+    replace._onEntryDeleted()
     assert replace.listBox.topLevelItemCount() == 2
 
     # Create a new entry
@@ -363,13 +430,8 @@ def testDlgProjSettings_Replace(qtbot, monkeypatch, nwGUI, projPath, mockRnd):
 
     # Edit the entry
     replace.listBox.setCurrentItem(replace.listBox.topLevelItem(2))
-    replace.editKey.setText("")
-    for c in "Th is ":
-        qtbot.keyClick(replace.editKey, c, delay=KEY_DELAY)
-    replace.editValue.setText("")
-    for c in "With This Stuff ":
-        qtbot.keyClick(replace.editValue, c, delay=KEY_DELAY)
-    qtbot.mouseClick(replace.applyButton, QtMouseLeft)
+    replace._onKeyEdit("Th is ")
+    replace._onValueEdit("With This Stuff ")
     assert replace.listBox.topLevelItem(2).text(0) == "<This>"  # type: ignore
     assert replace.listBox.topLevelItem(2).text(1) == "With This Stuff "  # type: ignore
 

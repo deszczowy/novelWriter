@@ -6,7 +6,7 @@ File History:
 Created: 2019-05-12 [0.1.0]
 
 This file is a part of novelWriter
-Copyright 2018–2024, Veronica Berglyd Olsen
+Copyright (C) 2019 Veronica Berglyd Olsen and novelWriter contributors
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -37,8 +37,8 @@ from typing import TYPE_CHECKING, Any, Literal, TypeVar
 from urllib.parse import urljoin
 from urllib.request import pathname2url
 
-from PyQt5.QtCore import QCoreApplication, QUrl
-from PyQt5.QtGui import QColor, QDesktopServices, QFont, QFontInfo
+from PyQt5.QtCore import QCoreApplication, QMimeData, QUrl
+from PyQt5.QtGui import QColor, QDesktopServices, QFont, QFontDatabase, QFontInfo
 
 from novelwriter.constants import nwConst, nwLabels, nwUnicode, trConst
 from novelwriter.enum import nwItemClass, nwItemLayout, nwItemType
@@ -434,11 +434,46 @@ def describeFont(font: QFont) -> str:
     return "Error"
 
 
+def fontMatcher(font: QFont) -> QFont:
+    """Make sure the font is the correct family, if possible. This
+    ensures that Qt doesn't re-use another font under the hood. The
+    default Qt5 font matching algorithm doesn't handle well changing
+    application fonts at runtime.
+    """
+    info = QFontInfo(font)
+    if (famRequest := font.family()) != (famActual := info.family()):
+        logger.warning("Font mismatch: Requested '%s', but got '%s'", famRequest, famActual)
+        db = QFontDatabase()
+        if famRequest in db.families():
+            styleRequest, sizeRequest = font.styleName(), font.pointSize()
+            logger.info("Lookup: %s, %s, %d pt", famRequest, styleRequest, sizeRequest)
+            temp = db.font(famRequest, styleRequest, sizeRequest)
+            temp.setPointSize(sizeRequest)  # Make sure it isn't changed
+            famFound, styleFound, sizeFound = temp.family(), temp.styleName(), temp.pointSize()
+            if famFound == famRequest:
+                logger.info("Found: %s, %s, %d pt", famFound, styleFound, sizeFound)
+                return temp
+        logger.warning("Could not find a font match in the font database")
+        logger.warning("If you just changed font, you may need to restart the application")
+    return font
+
+
 def qtLambda(func: Callable, *args: Any, **kwargs: Any) -> Callable:
     """A replacement for Python lambdas that works for Qt slots."""
     def wrapper(*a_: Any) -> None:
         func(*args, **kwargs)
     return wrapper
+
+
+def encodeMimeHandles(mimeData: QMimeData, handles: list[str]) -> None:
+    """Encode handles into a mime data object."""
+    mimeData.setData(nwConst.MIME_HANDLE, b"|".join(h.encode() for h in handles))
+    return
+
+
+def decodeMimeHandles(mimeData: QMimeData) -> list[str]:
+    """Decode and split a mime data object with handles."""
+    return mimeData.data(nwConst.MIME_HANDLE).data().decode().split("|")
 
 
 ##

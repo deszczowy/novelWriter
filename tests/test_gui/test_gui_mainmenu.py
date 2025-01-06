@@ -3,7 +3,7 @@ novelWriter – Main GUI Main Menu Class Tester
 =============================================
 
 This file is a part of novelWriter
-Copyright 2018–2024, Veronica Berglyd Olsen
+Copyright (C) 2020 Veronica Berglyd Olsen and novelWriter contributors
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -374,7 +374,6 @@ def testGuiMainMenu_Insert(qtbot, monkeypatch, nwGUI, fncPath, projPath, mockRnd
     """Test the Insert menu."""
     buildTestProject(nwGUI, projPath)
 
-    assert nwGUI.projView.projTree._getTreeItem(C.hSceneDoc) is not None
     assert nwGUI.openDocument(C.hSceneDoc) is True
     mainMenu = nwGUI.mainMenu
     docEditor = nwGUI.docEditor

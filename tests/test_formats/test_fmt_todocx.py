@@ -3,7 +3,7 @@ novelWriter – ToDocX Class Tester
 =================================
 
 This file is a part of novelWriter
-Copyright 2018–2024, Veronica Berglyd Olsen
+Copyright (C) 2024 Veronica Berglyd Olsen and novelWriter contributors
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -628,7 +628,7 @@ def testFmtToDocX_Fields(mockGUI):
         '<w:footnotePr><w:numFmt w:val="decimal" /></w:footnotePr>'
         '<w:pgSz w:w="11905" w:h="16837" w:orient="portrait" />'
         '<w:pgMar w:top="1133" w:right="1133" w:bottom="1133" w:left="1133" '
-        'w:header="566" w:footer="0" w:gutter="0" />'
+        'w:header="748" w:footer="0" w:gutter="0" />'
         '<w:pgNumType w:start="1" w:fmt="decimal" /><w:titlePg />'
         '</w:sectPr></w:body></w:document>'
     )
@@ -661,7 +661,7 @@ def testFmtToDocX_SaveDocument(mockGUI, prjLipsum, fncPath, tstPaths):
         (0, True), (1, True), (2, True), (3, True), (4, True), (5, False),
         (6, True), (7, True), (8, True), (9, False), (10, False), (11, True),
         (12, True), (13, True), (14, True), (15, True), (16, True), (17, True),
-        (18, True), (19, True), (20, True),
+        (18, True), (19, True), (20, True), (21, False),
     ]
 
     assert docPath.exists()

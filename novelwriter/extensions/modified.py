@@ -10,7 +10,7 @@ Created: 2024-05-01 [2.5b1] NToolDialog
 Created: 2024-05-01 [2.5b1] NNonBlockingDialog
 
 This file is a part of novelWriter
-Copyright 2018–2024, Veronica Berglyd Olsen
+Copyright (C) 2024 Veronica Berglyd Olsen and novelWriter contributors
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -30,14 +30,15 @@ from __future__ import annotations
 from enum import Enum
 from typing import TYPE_CHECKING
 
-from PyQt5.QtCore import QSize, Qt, pyqtSlot
-from PyQt5.QtGui import QWheelEvent
+from PyQt5.QtCore import QSize, Qt, pyqtSignal, pyqtSlot
+from PyQt5.QtGui import QMouseEvent, QWheelEvent
 from PyQt5.QtWidgets import (
-    QApplication, QComboBox, QDialog, QDoubleSpinBox, QSpinBox, QToolButton,
-    QWidget
+    QApplication, QComboBox, QDialog, QDoubleSpinBox, QLabel, QSpinBox,
+    QToolButton, QWidget
 )
 
 from novelwriter import CONFIG, SHARED
+from novelwriter.types import QtMouseLeft
 
 if TYPE_CHECKING:  # pragma: no cover
     from novelwriter.guimain import GuiMain
@@ -196,3 +197,14 @@ class NIconToggleButton(QToolButton):
         iconSize = self.iconSize()
         self.setIcon(SHARED.theme.getToggleIcon(iconKey, (iconSize.width(), iconSize.height())))
         return
+
+
+class NClickableLabel(QLabel):
+
+    mouseClicked = pyqtSignal()
+
+    def mousePressEvent(self, event: QMouseEvent) -> None:
+        """Capture a left mouse click and emit its signal."""
+        if event.button() == QtMouseLeft:
+            self.mouseClicked.emit()
+        return super().mousePressEvent(event)

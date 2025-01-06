@@ -3,7 +3,7 @@ novelWriter – Manuscript Tool Tester
 ====================================
 
 This file is a part of novelWriter
-Copyright 2018–2024, Veronica Berglyd Olsen
+Copyright (C) 2023 Veronica Berglyd Olsen and novelWriter contributors
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -48,7 +48,7 @@ def testToolManuscript_Init(monkeypatch, qtbot, nwGUI, projPath, mockRnd):
     buildTestProject(nwGUI, projPath)
     nwGUI.openProject(projPath)
     SHARED.project.storage.getDocument(C.hChapterDoc).writeDocument("## A Chapter\n\n\t\tHi")
-    allText = "New Novel\nBy Jane Doe\n\nNew Page\nA Chapter\n\t\tHi"
+    allText = "New Novel\nBy Jane Doe\nNew Page\n\nA Chapter\n\t\tHi"
 
     nwGUI.mainMenu.aBuildManuscript.activate(QAction.ActionEvent.Trigger)
     qtbot.waitUntil(lambda: SHARED.findTopLevelWidget(GuiManuscript) is not None, timeout=1000)

@@ -6,7 +6,7 @@ File History:
 Created: 2022-12-01 [2.1b1] NWBuildDocument
 
 This file is a part of novelWriter
-Copyright 2018–2024, Veronica Berglyd Olsen
+Copyright (C) 2022 Veronica Berglyd Olsen and novelWriter contributors
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -176,8 +176,9 @@ class NWBuildDocument:
 
         elif bFormat == nwBuildFmt.PDF:
             makeObj = ToQTextDocument(self._project)
+            makeObj.disableAnchors()
             filtered = self._setupBuild(makeObj)
-            makeObj.initDocument()
+            makeObj.initDocument(pdf=True)
             yield from self._iterBuild(makeObj, filtered)
             makeObj.closeDocument()
 
@@ -217,7 +218,7 @@ class NWBuildDocument:
         textFont = QFont(CONFIG.textFont)
         textFont.fromString(self._build.getStr("format.textFont"))
 
-        bldObj.setFont(textFont)
+        bldObj.setTextFont(textFont)
         bldObj.setLanguage(self._project.data.language)
 
         bldObj.setPartitionFormat(

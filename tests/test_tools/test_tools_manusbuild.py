@@ -3,7 +3,7 @@ novelWriter – Manuscript Build Dialog Tester
 ============================================
 
 This file is a part of novelWriter
-Copyright 2018–2024, Veronica Berglyd Olsen
+Copyright (C) 2023 Veronica Berglyd Olsen and novelWriter contributors
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -95,7 +95,7 @@ def testToolManuscriptBuild_Main(
         assert (fncPath / "TestBuild").with_suffix(nwLabels.BUILD_EXT[fmt]).exists()
         lastFmt = fmt
 
-    manus._dialogButtonClicked(manus.dlgButtons.button(QtDialogClose))
+    manus._dialogButtonClicked(manus.buttonBox.button(QtDialogClose))
     manus.deleteLater()
 
     assert build.lastBuildName == "TestBuild"
@@ -150,5 +150,5 @@ def testToolManuscriptBuild_Main(
         assert lastUrl.startswith("file://")
 
     # Finish
-    manus._dialogButtonClicked(manus.dlgButtons.button(QtDialogClose))
+    manus._dialogButtonClicked(manus.buttonBox.button(QtDialogClose))
     # qtbot.stop()

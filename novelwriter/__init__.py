@@ -3,10 +3,10 @@ novelWriter – Init File
 =======================
 
 File History:
-Created: 2018-09-22 [0.0.1]
+Created: 2018-09-22 [0.0.1]  main
 
 This file is a part of novelWriter
-Copyright 2018–2024, Veronica Berglyd Olsen
+Copyright (C) 2018 Veronica Berglyd Olsen and novelWriter contributors
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -47,9 +47,9 @@ __license__    = "GPLv3"
 __author__     = "Veronica Berglyd Olsen"
 __maintainer__ = "Veronica Berglyd Olsen"
 __email__      = "code@vkbo.net"
-__version__    = "2.6b1"
-__hexversion__ = "0x020600b1"
-__date__       = "2024-11-12"
+__version__    = "2.6b2"
+__hexversion__ = "0x020600b2"
+__date__       = "2024-12-23"
 __status__     = "Stable"
 __domain__     = "novelwriter.io"
 
@@ -60,9 +60,25 @@ logger = logging.getLogger(__name__)
 #  Main Program
 ##
 
-# Global config and data singletons
+# Globals Singletons
 CONFIG = Config()
 SHARED = SharedData()
+
+# ANSI Colours
+C_RED    = "\033[91m"
+C_GREEN  = "\033[92m"
+C_YELLOW = "\033[93m"
+C_BLUE   = "\033[94m"
+C_WHITE  = "\033[97m"
+C_END    = "\033[0m"
+
+# Log Formats
+L_TIME = "[{asctime:}]"
+L_FILE = "{filename:>18}"
+L_LINE = "{lineno:<4d}"
+L_LVLP = "{levelname:8}"
+L_LVLC = "{levelname:17}"
+L_TEXT = "{message:}"
 
 
 def main(sysArgs: list | None = None) -> GuiMain | None:
@@ -77,6 +93,7 @@ def main(sysArgs: list | None = None) -> GuiMain | None:
         "version",
         "info",
         "debug",
+        "color",
         "style=",
         "config=",
         "data=",
@@ -98,6 +115,7 @@ def main(sysArgs: list | None = None) -> GuiMain | None:
         " -v, --version  Print program version and exit.\n"
         "     --info     Print additional runtime information.\n"
         "     --debug    Print debug output. Includes --info.\n"
+        "     --color    Add ANSI colors to log output.\n"
         "     --meminfo  Show memory usage information in the status bar.\n"
         "     --style=   Sets Qt5 style flag. Defaults to 'Fusion'.\n"
         "     --config=  Alternative config file.\n"
@@ -106,12 +124,12 @@ def main(sysArgs: list | None = None) -> GuiMain | None:
 
     # Defaults
     logLevel = logging.WARN
-    logFormat = "{levelname:8}  {message:}"
+    fmtFlags = 0b00
     confPath = None
     dataPath = None
     testMode = False
-    qtStyle = "Fusion"
-    cmdOpen = None
+    qtStyle  = "Fusion"
+    cmdOpen  = None
 
     # Parse Options
     try:
@@ -135,8 +153,10 @@ def main(sysArgs: list | None = None) -> GuiMain | None:
             logLevel = logging.INFO
         elif inOpt == "--debug":
             CONFIG.isDebug = True
+            fmtFlags = fmtFlags | 0b10
             logLevel = logging.DEBUG
-            logFormat  = "[{asctime:}]  {filename:>18}:{lineno:<4d}  {levelname:8}  {message:}"
+        elif inOpt == "--color":
+            fmtFlags = fmtFlags | 0b01
         elif inOpt == "--style":
             qtStyle = inArg
         elif inOpt == "--config":
@@ -148,13 +168,32 @@ def main(sysArgs: list | None = None) -> GuiMain | None:
         elif inOpt == "--meminfo":
             CONFIG.memInfo = True
 
+    if fmtFlags & 0b01:
+        # This will overwrite the default level names, and also ensure that
+        # they can be converted back to integer levels
+        logging.addLevelName(logging.DEBUG,    f"{C_BLUE}DEBUG{C_END}")
+        logging.addLevelName(logging.INFO,     f"{C_GREEN}INFO{C_END}")
+        logging.addLevelName(logging.WARNING,  f"{C_YELLOW}WARNING{C_END}")
+        logging.addLevelName(logging.ERROR,    f"{C_RED}ERROR{C_END}")
+        logging.addLevelName(logging.CRITICAL, f"{C_RED}CRITICAL{C_END}")
+
+    # Determine Log Format
+    if fmtFlags == 0b00:
+        logFmt = f"{L_LVLP}  {L_TEXT}"
+    elif fmtFlags == 0b01:
+        logFmt = f"{L_LVLC}  {L_TEXT}"
+    elif fmtFlags == 0b10:
+        logFmt = f"{L_TIME}  {L_FILE}:{L_LINE}  {L_LVLP}  {L_TEXT}"
+    elif fmtFlags == 0b11:
+        logFmt = f"{L_TIME}  {C_BLUE}{L_FILE}{C_END}:{C_WHITE}{L_LINE}{C_END}  {L_LVLC}  {L_TEXT}"
+
     # Setup Logging
     pkgLogger = logging.getLogger(__package__)
     pkgLogger.setLevel(logLevel)
     if len(pkgLogger.handlers) == 0:
         # Make sure we only create one logger (mostly an issue with tests)
         cHandle = logging.StreamHandler()
-        cHandle.setFormatter(logging.Formatter(fmt=logFormat, style="{"))
+        cHandle.setFormatter(logging.Formatter(fmt=logFmt, style="{"))
         pkgLogger.addHandler(cHandle)
 
     logger.info("Starting novelWriter %s (%s) %s", __version__, __hexversion__, __date__)

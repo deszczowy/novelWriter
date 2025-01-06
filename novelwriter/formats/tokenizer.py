@@ -7,7 +7,7 @@ Created: 2019-05-05 [0.0.1] Tokenizer
 Created: 2023-05-23 [2.1b1] HeadingFormatter
 
 This file is a part of novelWriter
-Copyright 2018–2024, Veronica Berglyd Olsen
+Copyright (C) 2019 Veronica Berglyd Olsen and novelWriter contributors
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -35,7 +35,7 @@ from PyQt5.QtCore import QLocale
 from PyQt5.QtGui import QColor, QFont
 
 from novelwriter import CONFIG
-from novelwriter.common import checkInt, numberToRoman
+from novelwriter.common import checkInt, fontMatcher, numberToRoman
 from novelwriter.constants import (
     nwHeadFmt, nwKeyWords, nwLabels, nwShortcode, nwStats, nwStyles, nwUnicode,
     trConst
@@ -302,9 +302,9 @@ class Tokenizer(ABC):
         self._sceneStyle |= BlockFmt.PBB if pageBreak else BlockFmt.NONE
         return
 
-    def setFont(self, font: QFont) -> None:
+    def setTextFont(self, font: QFont) -> None:
         """Set the build font."""
-        self._textFont = font
+        self._textFont = fontMatcher(font)
         return
 
     def setLineHeight(self, height: float) -> None:

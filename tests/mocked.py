@@ -3,7 +3,7 @@ novelWriter – Test Suite Mocked Classes
 =======================================
 
 This file is a part of novelWriter
-Copyright 2018–2024, Veronica Berglyd Olsen
+Copyright (C) 2019 Veronica Berglyd Olsen and novelWriter contributors
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -20,7 +20,9 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 """
 from __future__ import annotations
 
-from PyQt5.QtGui import QPixmap
+from unittest.mock import MagicMock
+
+from PyQt5.QtGui import QFont, QIcon, QPixmap
 from PyQt5.QtWidgets import QWidget
 
 
@@ -28,7 +30,9 @@ class MockGuiMain(QWidget):
 
     def __init__(self):
         super().__init__()
-        self.mainStatus = MockStatusBar()
+        self.mainStatus = MagicMock()
+        self.docEditor = MagicMock()
+        self.docViewer = MagicMock()
         self.projPath = ""
         return
 
@@ -52,26 +56,23 @@ class MockGuiMain(QWidget):
         return "close"
 
 
-class MockStatusBar:
-
-    def __init__(self):
-        return
-
-    def setStatus(self, text):
-        return
-
-    def updateProjectStatus(self, status):
-        return
-
-
 class MockTheme:
 
     def __init__(self):
         self.baseIconHeight = 20
+        self.guiFont = QFont()
+        self.guiFontB = QFont()
+        self.guiFontBU = QFont()
         return
 
     def getPixmap(self, *a):
         return QPixmap()
+
+    def getIcon(self, *a) -> QIcon:
+        return QIcon()
+
+    def getItemIcon(self, *a, **k) -> QIcon:
+        return QIcon()
 
 
 class MockApp:

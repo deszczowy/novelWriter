@@ -3,7 +3,7 @@ novelWriter – Main GUI Novel Tree Class Tester
 ==============================================
 
 This file is a part of novelWriter
-Copyright 2018–2024, Veronica Berglyd Olsen
+Copyright (C) 2021 Veronica Berglyd Olsen and novelWriter contributors
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -46,7 +46,7 @@ def testGuiNovelTree_TreeItems(qtbot, monkeypatch, nwGUI, projPath, mockRnd):
 
     nwGUI._switchFocus(nwFocus.TREE)
     nwGUI.projView.projTree.clearSelection()
-    nwGUI.projView.projTree._getTreeItem(C.hCharRoot).setSelected(True)
+    nwGUI.projView.projTree.setSelectedHandle(C.hCharRoot)
     nwGUI.projView.projTree.newTreeItem(nwItemType.FILE)
 
     contentPath = SHARED.project.storage.contentPath

@@ -3,7 +3,7 @@ novelWriter – Tokenizer Class Tester
 ====================================
 
 This file is a part of novelWriter
-Copyright 2018–2024, Veronica Berglyd Olsen
+Copyright (C) 2020 Veronica Berglyd Olsen and novelWriter contributors
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -110,7 +110,7 @@ def testFmtToken_Setters(mockGUI):
     tokens.setSceneFormat(f"S: {nwHeadFmt.TITLE}", True)
     tokens.setHardSceneFormat(f"H: {nwHeadFmt.TITLE}", True)
     tokens.setSectionFormat(f"X: {nwHeadFmt.TITLE}", True)
-    tokens.setFont(QFont("Monospace", 10))
+    tokens.setTextFont(QFont("Monospace", 10))
     tokens.setLineHeight(2.0)
     tokens.setBlockIndent(6.0)
     tokens.setJustify(True)

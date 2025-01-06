@@ -9,7 +9,7 @@ Created: 2021-01-27 [1.2b1] ODTTextStyle
 Created: 2021-08-14 [1.5b1] XMLParagraph
 
 This file is a part of novelWriter
-Copyright 2018–2024, Veronica Berglyd Olsen
+Copyright (C) 2021 Veronica Berglyd Olsen and novelWriter contributors
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -43,7 +43,7 @@ from novelwriter.constants import nwHeadFmt, nwStyles
 from novelwriter.core.project import NWProject
 from novelwriter.formats.shared import BlockFmt, BlockTyp, TextFmt, stripEscape
 from novelwriter.formats.tokenizer import Tokenizer
-from novelwriter.types import FONT_STYLE, FONT_WEIGHTS, QtHexRgb
+from novelwriter.types import FONT_STYLE, QtHexRgb
 
 logger = logging.getLogger(__name__)
 
@@ -220,20 +220,14 @@ class ToOdt(Tokenizer):
         # Initialise Variables
         # ====================
 
-        intWeight = FONT_WEIGHTS.get(self._textFont.weight(), 400)
-        fontWeight = str(intWeight)
-        fontBold = str(min(intWeight + 300, 900))
-
         lang, _, country = self._dLocale.name().partition("_")
         self._dLanguage = lang or self._dLanguage
         self._dCountry = country or self._dCountry
 
         self._fontFamily   = self._textFont.family()
         self._fontSize     = self._textFont.pointSize()
-        self._fontWeight   = FONT_WEIGHT_MAP.get(fontWeight, fontWeight)
         self._fontStyle    = FONT_STYLE.get(self._textFont.style(), "normal")
         self._fontPitch    = "fixed" if self._textFont.fixedPitch() else "variable"
-        self._fontBold     = FONT_WEIGHT_MAP.get(fontBold, fontBold)
         self._headWeight   = self._fontBold if self._boldHeads else None
         self._fBlockIndent = self._emToCm(self._blockIndent)
 
@@ -672,7 +666,7 @@ class ToOdt(Tokenizer):
 
     def _emToCm(self, value: float) -> str:
         """Converts an em value to centimetres."""
-        return f"{value*2.54/72*self._fontSize:.3f}cm"
+        return f"{value*self._fontSize*2.54/72.0:.3f}cm"
 
     def _emToPt(self, scale: float) -> str:
         """Compute relative font size in points."""
@@ -700,10 +694,10 @@ class ToOdt(Tokenizer):
 
         xHead = ET.SubElement(xPage, _mkTag("style", "header-style"))
         ET.SubElement(xHead, _mkTag("style", "header-footer-properties"), attrib={
-            _mkTag("fo", "min-height"): "0.600cm",
+            _mkTag("fo", "min-height"): self._emToCm(1.5),
             _mkTag("fo", "margin-left"): "0.000cm",
             _mkTag("fo", "margin-right"): "0.000cm",
-            _mkTag("fo", "margin-bottom"): "0.500cm",
+            _mkTag("fo", "margin-bottom"): self._emToCm(0.5),
         })
 
         return

@@ -6,7 +6,7 @@ File History:
 Created: 2019-04-28 [0.0.1]
 
 This file is a part of novelWriter
-Copyright 2018–2024, Veronica Berglyd Olsen
+Copyright (C) 2019 Veronica Berglyd Olsen and novelWriter contributors
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -52,6 +52,9 @@ class nwConst:
 
     # Requests
     USER_AGENT = "Mozilla/5.0 (compatible; novelWriter (Python))"
+
+    # Mime Types
+    MIME_HANDLE = "text/vnd.novelwriter.handle"
 
     # Gui Settings
     STATUS_MSG_TIMEOUT = 15000  # milliseconds
@@ -270,6 +273,10 @@ class nwLabels:
         "doc_h3":   QT_TRANSLATE_NOOP("Constant", "Novel Scene"),
         "doc_h4":   QT_TRANSLATE_NOOP("Constant", "Novel Section"),
         "note":     QT_TRANSLATE_NOOP("Constant", "Project Note"),
+    }
+    ACTIVE_NAME = {
+        "checked":   QT_TRANSLATE_NOOP("Constant", "Active"),
+        "unchecked": QT_TRANSLATE_NOOP("Constant", "Inactive"),
     }
     KEY_NAME = {
         nwKeyWords.TAG_KEY:     QT_TRANSLATE_NOOP("Constant", "Tag"),

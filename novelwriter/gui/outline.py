@@ -10,7 +10,7 @@ Created: 2019-11-16 [0.4.1]  GuiOutlineHeaderMenu
 Created: 2020-06-02 [0.7]    GuiOutlineDetails
 
 This file is a part of novelWriter
-Copyright 2018–2024, Veronica Berglyd Olsen
+Copyright (C) 2019 Veronica Berglyd Olsen and novelWriter contributors
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -41,9 +41,9 @@ from PyQt5.QtWidgets import (
 )
 
 from novelwriter import CONFIG, SHARED
-from novelwriter.common import checkInt, formatFileFilter, makeFileNameSafe
+from novelwriter.common import checkInt, formatFileFilter
 from novelwriter.constants import nwKeyWords, nwLabels, nwStats, nwStyles, trConst
-from novelwriter.enum import nwDocMode, nwItemClass, nwItemLayout, nwItemType, nwOutline
+from novelwriter.enum import nwChange, nwDocMode, nwItemClass, nwItemLayout, nwItemType, nwOutline
 from novelwriter.error import logException
 from novelwriter.extensions.configlayout import NColourLabel
 from novelwriter.extensions.novelselector import NovelSelector
@@ -165,8 +165,8 @@ class GuiOutlineView(QWidget):
     #  Public Slots
     ##
 
-    @pyqtSlot(str)
-    def updateRootItem(self, tHandle: str) -> None:
+    @pyqtSlot(str, Enum)
+    def updateRootItem(self, tHandle: str, change: nwChange) -> None:
         """Handle tasks whenever a root folders changes."""
         self.outlineBar.populateNovelList()
         self.outlineData.updateClasses()
@@ -380,8 +380,8 @@ class GuiOutlineTree(QTreeWidget):
         self.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.setExpandsOnDoubleClick(False)
         self.setDragEnabled(False)
-        self.itemDoubleClicked.connect(self._treeDoubleClick)
-        self.itemSelectionChanged.connect(self._itemSelected)
+        self.itemDoubleClicked.connect(self._onItemDoubleClicked)
+        self.itemSelectionChanged.connect(self._onItemSelectionChanged)
 
         self.setIconSize(SHARED.theme.baseIconSize)
         self.setIndentation(0)
@@ -541,11 +541,10 @@ class GuiOutlineTree(QTreeWidget):
     @pyqtSlot()
     def exportOutline(self) -> None:
         """Export the outline as a CSV file."""
-        path = CONFIG.lastPath("outline") / f"{makeFileNameSafe(SHARED.project.data.name)}.csv"
-        path, _ = QFileDialog.getSaveFileName(
-            self, self.tr("Save Outline As"), str(path), formatFileFilter(["*.csv", "*"])
-        )
-        if path:
+        name = CONFIG.lastPath("outline") / f"{SHARED.project.data.fileSafeName}.csv"
+        if path := QFileDialog.getSaveFileName(
+            self, self.tr("Save Outline As"), str(name), formatFileFilter(["*.csv", "*"])
+        )[0]:
             CONFIG.setLastPath("outline", path)
             logger.info("Writing CSV file: %s", path)
             cols = [col for col in self._treeOrder if not self._colHidden[col]]
@@ -563,7 +562,7 @@ class GuiOutlineTree(QTreeWidget):
     ##
 
     @pyqtSlot("QTreeWidgetItem*", int)
-    def _treeDoubleClick(self, tItem: QTreeWidgetItem, tCol: int) -> None:
+    def _onItemDoubleClicked(self, tItem: QTreeWidgetItem, tCol: int) -> None:
         """Extract the handle and line number of the title double-
         clicked, and send it to the main gui class for opening in the
         document editor.
@@ -574,14 +573,13 @@ class GuiOutlineTree(QTreeWidget):
         return
 
     @pyqtSlot()
-    def _itemSelected(self) -> None:
+    def _onItemSelectionChanged(self) -> None:
         """Extract the handle and line number of the currently selected
         title, and send it to the details panel.
         """
-        selItems = self.selectedItems()
-        if selItems:
-            tHandle = selItems[0].data(self._colIdx[nwOutline.TITLE], self.D_HANDLE)
-            sTitle = selItems[0].data(self._colIdx[nwOutline.TITLE], self.D_TITLE)
+        if items := self.selectedItems():
+            tHandle = items[0].data(self._colIdx[nwOutline.TITLE], self.D_HANDLE)
+            sTitle = items[0].data(self._colIdx[nwOutline.TITLE], self.D_TITLE)
             self.activeItemChanged.emit(tHandle, sTitle)
         return
 

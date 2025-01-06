@@ -3,7 +3,7 @@ novelWriter – Error Handler Tester
 ==================================
 
 This file is a part of novelWriter
-Copyright 2018–2024, Veronica Berglyd Olsen
+Copyright (C) 2020 Veronica Berglyd Olsen and novelWriter contributors
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -101,7 +101,7 @@ def testBaseError_Handler(qtbot, monkeypatch, nwGUI):
     with monkeypatch.context() as mp:
         mp.setattr(NWErrorMessage, "exec", lambda *a: None)
         mp.setattr("PyQt5.QtWidgets.QApplication.exit", lambda *a: None)
-        mp.setattr(nwGUI, "closeMain", causeException)
+        mp.setattr("novelwriter.guimain.GuiMain.closeMain", causeException)
         exceptionHandler(Exception, "Error Message", None)  # type: ignore
 
     nwGUI.closeMain()

@@ -3,7 +3,7 @@ novelWriter – Common Functions Tester
 =====================================
 
 This file is a part of novelWriter
-Copyright 2018–2024, Veronica Berglyd Olsen
+Copyright (C) 2019 Veronica Berglyd Olsen and novelWriter contributors
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -27,18 +27,19 @@ from xml.etree import ElementTree as ET
 
 import pytest
 
-from PyQt5.QtCore import QUrl
-from PyQt5.QtGui import QColor, QDesktopServices, QFontDatabase
+from PyQt5.QtCore import QMimeData, QUrl
+from PyQt5.QtGui import QColor, QDesktopServices, QFont, QFontDatabase, QFontInfo
 
 from novelwriter.common import (
     NWConfigParser, checkBool, checkFloat, checkInt, checkIntTuple, checkPath,
-    checkString, checkStringNone, checkUuid, compact, cssCol, describeFont,
-    elide, firstFloat, formatFileFilter, formatInt, formatTime,
-    formatTimeStamp, formatVersion, fuzzyTime, getFileSize, hexToInt, isHandle,
-    isItemClass, isItemLayout, isItemType, isListInstance, isTitleTag,
-    jsonEncode, makeFileNameSafe, minmax, numberToRoman, openExternalPath,
-    readTextFile, simplified, transferCase, uniqueCompact, xmlElement,
-    xmlIndent, xmlSubElem, yesNo
+    checkString, checkStringNone, checkUuid, compact, cssCol,
+    decodeMimeHandles, describeFont, elide, encodeMimeHandles, firstFloat,
+    fontMatcher, formatFileFilter, formatInt, formatTime, formatTimeStamp,
+    formatVersion, fuzzyTime, getFileSize, hexToInt, isHandle, isItemClass,
+    isItemLayout, isItemType, isListInstance, isTitleTag, jsonEncode,
+    makeFileNameSafe, minmax, numberToRoman, openExternalPath, readTextFile,
+    simplified, transferCase, uniqueCompact, xmlElement, xmlIndent, xmlSubElem,
+    yesNo
 )
 
 from tests.mocked import causeOSError
@@ -526,6 +527,34 @@ def testBaseCommon_describeFont():
     font.setPointSize(12)
     assert describeFont(font).startswith("12 pt")
     assert describeFont(None) == "Error"  # type: ignore
+
+
+@pytest.mark.base
+def testBaseCommon_fontMatcher(monkeypatch):
+    """Test the fontMatcher function."""
+    # Nonsense font is just returned
+    nonsense = QFont("nonesense", 10)
+    assert fontMatcher(nonsense) is nonsense
+
+    # General font
+    fontDB = QFontDatabase()
+    if len(fontDB.families()) > 1:
+        fontOne = QFont(fontDB.families()[0])
+        fontTwo = QFont(fontDB.families()[1])
+        check = QFont(fontOne)
+        check.setFamily(fontTwo.family())
+        with monkeypatch.context() as mp:
+            mp.setattr(QFontInfo, "family", lambda *a: "nonesense")
+            assert fontMatcher(check).family() == fontTwo.family()
+
+
+@pytest.mark.base
+def testBaseCommon_encodeDecodeMimeHandles(monkeypatch):
+    """Test the encodeMimeHandles and decodeMimeHandles functions."""
+    handles = ["0123456789abc", "123456789abcd", "23456789abcde"]
+    mimeData = QMimeData()
+    encodeMimeHandles(mimeData, handles)
+    assert decodeMimeHandles(mimeData) == handles
 
 
 @pytest.mark.base

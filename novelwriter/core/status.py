@@ -7,7 +7,7 @@ Created:   2019-05-19 [0.1.3] NWStatus
 Rewritten: 2022-04-05 [2.0b1] NWStatus
 
 This file is a part of novelWriter
-Copyright 2018–2024, Veronica Berglyd Olsen
+Copyright (C) 2019 Veronica Berglyd Olsen and novelWriter contributors
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -65,6 +65,11 @@ class StatusEntry:
 
 NO_ENTRY = StatusEntry("", QColor(0, 0, 0), nwStatusShape.SQUARE, QIcon(), 0)
 
+if TYPE_CHECKING:  # pragma: no cover
+    # Requires Python 3.10
+    T_UpdateEntry = list[tuple[str | None, StatusEntry]]
+    T_StatusKind = Literal["s", "i"]
+
 
 class NWStatus:
 
@@ -73,7 +78,7 @@ class NWStatus:
 
     __slots__ = ("_store", "_default", "_prefix", "_height")
 
-    def __init__(self, prefix: Literal["s", "i"]) -> None:
+    def __init__(self, prefix: T_StatusKind) -> None:
         self._store: dict[str, StatusEntry] = {}
         self._default = None
         self._prefix = prefix[:1]
@@ -120,7 +125,7 @@ class NWStatus:
 
         return key
 
-    def update(self, update: list[tuple[str | None, StatusEntry]]) -> None:
+    def update(self, update: T_UpdateEntry) -> None:
         """Update the list of statuses."""
         self._store.clear()
         for key, entry in update:
@@ -129,9 +134,6 @@ class NWStatus:
         # Check if we need a new default
         if self._default not in self._store:
             self._default = next(iter(self._store)) if self._store else None
-
-        # Emit the change signal
-        SHARED.projectSingalProxy({"event": "statusLabels", "kind": self._prefix})
 
         return
 
@@ -171,6 +173,20 @@ class NWStatus:
     def iterItems(self) -> Iterable[tuple[str, StatusEntry]]:
         """Yield entries from the status icons."""
         yield from self._store.items()
+
+    def fromRaw(self, data: list[str]) -> StatusEntry | None:
+        """Create a StatusEntry from a list of three strings consisting
+        of shape, colour, and name. This entry is not automatically
+        added to the list of entries.
+        """
+        try:
+            shape = nwStatusShape[str(data[0])]
+            color = QColor(str(data[1]))
+            icon = NWStatus.createIcon(self._height, color, shape)
+            return StatusEntry(simplified(data[2]), color, shape, icon)
+        except Exception:
+            logger.error("Could not parse entry %s", str(data))
+        return None
 
     @staticmethod
     def createIcon(height: int, color: QColor, shape: nwStatusShape) -> QIcon:

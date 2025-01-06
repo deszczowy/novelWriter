@@ -3,7 +3,7 @@ novelWriter – Manuscript Build Settings Tester
 ==============================================
 
 This file is a part of novelWriter
-Copyright 2018–2024, Veronica Berglyd Olsen
+Copyright (C) 2023 Veronica Berglyd Olsen and novelWriter contributors
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -223,7 +223,7 @@ def testCoreBuildSettings_Filters(mockGUI, fncPath: Path, mockRnd):
     build = BuildSettings()
 
     # Add some more items
-    hArchRoot = project.newRoot(nwItemClass.ARCHIVE, "Archive")
+    hArchRoot = project.newRoot(nwItemClass.ARCHIVE)
     hPlotDoc  = project.newFile("Main Plot", C.hPlotRoot)
     hCharDoc  = project.newFile("Jane Doe", C.hCharRoot)
 

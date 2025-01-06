@@ -7,7 +7,7 @@ Created:   2018-09-29 [0.0.1] GuiProjectSettings
 Rewritten: 2024-01-26 [2.3b1] GuiProjectSettings
 
 This file is a part of novelWriter
-Copyright 2018–2024, Veronica Berglyd Olsen
+Copyright (C) 2018 Veronica Berglyd Olsen and novelWriter contributors
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -24,18 +24,21 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 """
 from __future__ import annotations
 
+import csv
 import logging
+
+from pathlib import Path
 
 from PyQt5.QtCore import Qt, pyqtSignal, pyqtSlot
 from PyQt5.QtGui import QCloseEvent, QColor
 from PyQt5.QtWidgets import (
     QAbstractItemView, QApplication, QColorDialog, QDialogButtonBox,
-    QHBoxLayout, QLineEdit, QMenu, QStackedWidget, QToolButton, QTreeWidget,
-    QTreeWidgetItem, QVBoxLayout, QWidget
+    QFileDialog, QGridLayout, QHBoxLayout, QLineEdit, QMenu, QStackedWidget,
+    QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget
 )
 
 from novelwriter import CONFIG, SHARED
-from novelwriter.common import qtLambda, simplified
+from novelwriter.common import formatFileFilter, qtLambda, simplified
 from novelwriter.constants import nwLabels, trConst
 from novelwriter.core.status import NWStatus, StatusEntry
 from novelwriter.enum import nwStatusShape
@@ -185,11 +188,11 @@ class GuiProjectSettings(NDialog):
 
         if self.statusPage.changed:
             logger.debug("Updating status labels")
-            project.data.itemStatus.update(self.statusPage.getNewList())
+            project.updateStatus("s", self.statusPage.getNewList())
 
         if self.importPage.changed:
             logger.debug("Updating importance labels")
-            project.data.itemImport.update(self.importPage.getNewList())
+            project.updateStatus("i", self.importPage.getNewList())
 
         if self.replacePage.changed:
             logger.debug("Updating auto-replace settings")
@@ -310,11 +313,13 @@ class _StatusPage(NFixedPage):
         super().__init__(parent=parent)
 
         if isStatus:
-            status = SHARED.project.data.itemStatus
+            self._kind = self.tr("Status")
+            self._store = SHARED.project.data.itemStatus
             pageLabel = self.tr("Novel Document Status Levels")
             colSetting = "statusColW"
         else:
-            status = SHARED.project.data.itemImport
+            self._kind = self.tr("Importance")
+            self._store = SHARED.project.data.itemImport
             pageLabel = self.tr("Project Note Importance Levels")
             colSetting = "importColW"
 
@@ -352,29 +357,42 @@ class _StatusPage(NFixedPage):
         self.listBox.setIndentation(0)
         self.listBox.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.listBox.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
-        self.listBox.itemSelectionChanged.connect(self._selectionChanged)
+        self.listBox.itemSelectionChanged.connect(self._onSelectionChanged)
 
-        for key, entry in status.iterItems():
+        for key, entry in self._store.iterItems():
             self._addItem(key, StatusEntry.duplicate(entry))
 
         # List Controls
         self.addButton = NIconToolButton(self, iSz, "add")
-        self.addButton.clicked.connect(self._newItem)
+        self.addButton.setToolTip(self.tr("Add Label"))
+        self.addButton.clicked.connect(self._onItemCreate)
 
         self.delButton = NIconToolButton(self, iSz, "remove")
-        self.delButton.clicked.connect(self._delItem)
+        self.delButton.setToolTip(self.tr("Delete Label"))
+        self.delButton.clicked.connect(self._onItemDelete)
 
         self.upButton = NIconToolButton(self, iSz, "up")
+        self.upButton.setToolTip(self.tr("Move Up"))
         self.upButton.clicked.connect(qtLambda(self._moveItem, -1))
 
-        self.dnButton = NIconToolButton(self, iSz, "down")
-        self.dnButton.clicked.connect(qtLambda(self._moveItem, 1))
+        self.downButton = NIconToolButton(self, iSz, "down")
+        self.downButton.setToolTip(self.tr("Move Down"))
+        self.downButton.clicked.connect(qtLambda(self._moveItem, 1))
+
+        self.importButton = NIconToolButton(self, iSz, "import")
+        self.importButton.setToolTip(self.tr("Import Labels"))
+        self.importButton.clicked.connect(self._importLabels)
+
+        self.exportButton = NIconToolButton(self, iSz, "export")
+        self.exportButton.setToolTip(self.tr("Export Labels"))
+        self.exportButton.clicked.connect(self._exportLabels)
 
         # Edit Form
-        self.editName = QLineEdit(self)
-        self.editName.setMaxLength(40)
-        self.editName.setPlaceholderText(self.tr("Select item to edit"))
-        self.editName.setEnabled(False)
+        self.labelText = QLineEdit(self)
+        self.labelText.setMaxLength(40)
+        self.labelText.setPlaceholderText(self.tr("Select item to edit"))
+        self.labelText.setEnabled(False)
+        self.labelText.textEdited.connect(self._onNameEdit)
 
         buttonStyle = (
             f"QToolButton {{padding: 0 {bPd}px;}} "
@@ -386,13 +404,13 @@ class _StatusPage(NFixedPage):
         self.colorButton.setSizePolicy(QtSizeMinimum, QtSizeMinimumExpanding)
         self.colorButton.setStyleSheet(buttonStyle)
         self.colorButton.setEnabled(False)
-        self.colorButton.clicked.connect(self._selectColour)
+        self.colorButton.clicked.connect(self._onColourSelect)
 
         def buildMenu(menu: QMenu, items: dict[nwStatusShape, str]) -> None:
             for shape, label in items.items():
                 icon = NWStatus.createIcon(self._iPx, iColor, shape)
                 action = menu.addAction(icon, trConst(label))
-                action.triggered.connect(lambda _, shape=shape: self._selectShape(shape))
+                action.triggered.connect(qtLambda(self._selectShape, shape))
                 self._icons[shape] = icon
 
         self.shapeMenu = QMenu(self)
@@ -408,33 +426,27 @@ class _StatusPage(NFixedPage):
         self.shapeButton.setStyleSheet(buttonStyle)
         self.shapeButton.setEnabled(False)
 
-        self.applyButton = QToolButton(self)
-        self.applyButton.setText(self.tr("Apply"))
-        self.applyButton.setSizePolicy(QtSizeMinimum, QtSizeMinimumExpanding)
-        self.applyButton.setEnabled(False)
-        self.applyButton.clicked.connect(self._applyChanges)
-
         # Assemble
         self.listControls = QVBoxLayout()
         self.listControls.addWidget(self.addButton)
         self.listControls.addWidget(self.delButton)
         self.listControls.addWidget(self.upButton)
-        self.listControls.addWidget(self.dnButton)
+        self.listControls.addWidget(self.downButton)
         self.listControls.addStretch(1)
+        self.listControls.addWidget(self.importButton)
+        self.listControls.addWidget(self.exportButton)
 
         self.editBox = QHBoxLayout()
-        self.editBox.addWidget(self.editName, 1)
+        self.editBox.addWidget(self.labelText, 1)
         self.editBox.addWidget(self.colorButton, 0)
         self.editBox.addWidget(self.shapeButton, 0)
-        self.editBox.addWidget(self.applyButton, 0)
 
-        self.mainBox = QVBoxLayout()
-        self.mainBox.addWidget(self.listBox, 1)
-        self.mainBox.addLayout(self.editBox, 0)
-
-        self.innerBox = QHBoxLayout()
-        self.innerBox.addLayout(self.mainBox, 1)
-        self.innerBox.addLayout(self.listControls, 0)
+        self.innerBox = QGridLayout()
+        self.innerBox.addWidget(self.listBox, 0, 0)
+        self.innerBox.addLayout(self.listControls, 0, 1)
+        self.innerBox.addLayout(self.editBox, 1, 0)
+        self.innerBox.setRowStretch(0, 1)
+        self.innerBox.setColumnStretch(0, 1)
 
         self.outerBox = QVBoxLayout()
         self.outerBox.addWidget(self.pageTitle, 0)
@@ -474,16 +486,28 @@ class _StatusPage(NFixedPage):
     #  Private Slots
     ##
 
+    @pyqtSlot(str)
+    def _onNameEdit(self, text: str) -> None:
+        """Update the status label text."""
+        if item := self._getSelectedItem():
+            name = simplified(text)
+            entry: StatusEntry = item.data(self.C_DATA, self.D_ENTRY)
+            entry.name = name
+            item.setText(self.C_LABEL, name)
+            self._changed = True
+        return
+
     @pyqtSlot()
-    def _selectColour(self) -> None:
+    def _onColourSelect(self) -> None:
         """Open a dialog to select the status icon colour."""
         if (color := QColorDialog.getColor(self._color, self, self.trSelColor)).isValid():
             self._color = color
             self._setButtonIcons()
+            self._updateIcon()
         return
 
     @pyqtSlot()
-    def _newItem(self) -> None:
+    def _onItemCreate(self) -> None:
         """Create a new status item."""
         color = QColor(100, 100, 100)
         shape = nwStatusShape.SQUARE
@@ -493,7 +517,7 @@ class _StatusPage(NFixedPage):
         return
 
     @pyqtSlot()
-    def _delItem(self) -> None:
+    def _onItemDelete(self) -> None:
         """Delete a status item."""
         if item := self._getSelectedItem():
             iRow = self.listBox.indexOfTopLevelItem(item)
@@ -506,28 +530,7 @@ class _StatusPage(NFixedPage):
         return
 
     @pyqtSlot()
-    def _applyChanges(self) -> None:
-        """Save changes made to a status item."""
-        if item := self._getSelectedItem():
-            entry: StatusEntry = item.data(self.C_DATA, self.D_ENTRY)
-
-            name = simplified(self.editName.text())
-            icon = NWStatus.createIcon(self._iPx, self._color, self._shape)
-
-            entry.name = name
-            entry.color = self._color
-            entry.shape = self._shape
-            entry.icon = icon
-
-            item.setText(self.C_LABEL, name)
-            item.setIcon(self.C_LABEL, icon)
-
-            self._changed = True
-
-        return
-
-    @pyqtSlot()
-    def _selectionChanged(self) -> None:
+    def _onSelectionChanged(self) -> None:
         """Extract the info of a selected item and populate the settings
         boxes and button. If no item is selected, clear the form.
         """
@@ -537,25 +540,59 @@ class _StatusPage(NFixedPage):
             self._shape = entry.shape
             self._setButtonIcons()
 
-            self.editName.setText(entry.name)
-            self.editName.selectAll()
-            self.editName.setFocus()
+            self.labelText.setText(entry.name)
+            self.labelText.selectAll()
+            self.labelText.setFocus()
 
-            self.editName.setEnabled(True)
+            self.labelText.setEnabled(True)
             self.colorButton.setEnabled(True)
             self.shapeButton.setEnabled(True)
-            self.applyButton.setEnabled(True)
-
         else:
             self._color = QColor(100, 100, 100)
             self._shape = nwStatusShape.SQUARE
             self._setButtonIcons()
-            self.editName.setText("")
+            self.labelText.setText("")
 
-            self.editName.setEnabled(False)
+            self.labelText.setEnabled(False)
             self.colorButton.setEnabled(False)
             self.shapeButton.setEnabled(False)
-            self.applyButton.setEnabled(False)
+        return
+
+    @pyqtSlot()
+    def _importLabels(self) -> None:
+        """Import labels from file."""
+        if path := QFileDialog.getOpenFileName(
+            self, self.tr("Import File"),
+            str(CONFIG.homePath()), filter=formatFileFilter(["*.csv", "*"]),
+        )[0]:
+            try:
+                with open(path, mode="r", encoding="utf-8") as fo:
+                    for row in csv.reader(fo):
+                        if entry := self._store.fromRaw(row):
+                            self._addItem(None, entry)
+                            self._changed = True
+            except Exception as exc:
+                SHARED.error("Could not read file.", exc=exc)
+                return
+        return
+
+    @pyqtSlot()
+    def _exportLabels(self) -> None:
+        """Export labels to file."""
+        name = f"{SHARED.project.data.fileSafeName} - {self._kind}.csv"
+        if path := QFileDialog.getSaveFileName(
+            self, self.tr("Export File"), str(CONFIG.homePath() / name),
+        )[0]:
+            try:
+                path = Path(path).with_suffix(".csv")
+                with open(path, mode="w", encoding="utf-8") as fo:
+                    writer = csv.writer(fo)
+                    for n in range(self.listBox.topLevelItemCount()):
+                        if item := self.listBox.topLevelItem(n):
+                            entry: StatusEntry = item.data(self.C_DATA, self.D_ENTRY)
+                            writer.writerow([entry.shape.name, entry.color.name(), entry.name])
+            except Exception as exc:
+                SHARED.error("Could not write file.", exc=exc)
         return
 
     ##
@@ -566,6 +603,19 @@ class _StatusPage(NFixedPage):
         """Set the current shape."""
         self._shape = shape
         self._setButtonIcons()
+        self._updateIcon()
+        return
+
+    def _updateIcon(self) -> None:
+        """Apply changes made to a status icon."""
+        if item := self._getSelectedItem():
+            icon = NWStatus.createIcon(self._iPx, self._color, self._shape)
+            entry: StatusEntry = item.data(self.C_DATA, self.D_ENTRY)
+            entry.color = self._color
+            entry.shape = self._shape
+            entry.icon = icon
+            item.setIcon(self.C_LABEL, icon)
+            self._changed = True
         return
 
     def _addItem(self, key: str | None, entry: StatusEntry) -> None:
@@ -644,7 +694,7 @@ class _ReplacePage(NFixedPage):
         self.listBox.setIndentation(0)
         self.listBox.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.listBox.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
-        self.listBox.itemSelectionChanged.connect(self._selectionChanged)
+        self.listBox.itemSelectionChanged.connect(self._onSelectionChanged)
 
         for aKey, aVal in SHARED.project.data.autoReplace.items():
             newItem = QTreeWidgetItem(["<%s>" % aKey, aVal])
@@ -655,25 +705,22 @@ class _ReplacePage(NFixedPage):
 
         # List Controls
         self.addButton = NIconToolButton(self, iSz, "add")
-        self.addButton.clicked.connect(self._addEntry)
+        self.addButton.clicked.connect(self._onEntryCreated)
 
         self.delButton = NIconToolButton(self, iSz, "remove")
-        self.delButton.clicked.connect(self._delEntry)
+        self.delButton.clicked.connect(self._onEntryDeleted)
 
         # Edit Form
         self.editKey = QLineEdit(self)
         self.editKey.setPlaceholderText(self.tr("Select item to edit"))
         self.editKey.setEnabled(False)
         self.editKey.setMaxLength(40)
+        self.editKey.textEdited.connect(self._onKeyEdit)
 
         self.editValue = QLineEdit(self)
         self.editValue.setEnabled(False)
-        self.editValue.setMaxLength(80)
-
-        self.applyButton = QToolButton(self)
-        self.applyButton.setText(self.tr("Apply"))
-        self.applyButton.setSizePolicy(QtSizeMinimum, QtSizeMinimumExpanding)
-        self.applyButton.clicked.connect(self._applyChanges)
+        self.editValue.setMaxLength(250)
+        self.editValue.textEdited.connect(self._onValueEdit)
 
         # Assemble
         self.listControls = QVBoxLayout()
@@ -684,7 +731,6 @@ class _ReplacePage(NFixedPage):
         self.editBox = QHBoxLayout()
         self.editBox.addWidget(self.editKey, 4)
         self.editBox.addWidget(self.editValue, 5)
-        self.editBox.addWidget(self.applyButton, 0)
 
         self.mainBox = QVBoxLayout()
         self.mainBox.addWidget(self.listBox, 1)
@@ -716,7 +762,7 @@ class _ReplacePage(NFixedPage):
         new = {}
         for n in range(self.listBox.topLevelItemCount()):
             if item := self.listBox.topLevelItem(n):
-                if key := self._stripNotAllowed(item.text(self.C_KEY)):
+                if key := self._stripKey(item.text(self.C_KEY)):
                     new[key] = item.text(self.C_REPL)
         return new
 
@@ -728,13 +774,29 @@ class _ReplacePage(NFixedPage):
     #  Private Slots
     ##
 
+    @pyqtSlot(str)
+    def _onKeyEdit(self, text: str) -> None:
+        """Update the key text."""
+        if (item := self._getSelectedItem()) and (key := self._stripKey(text)):
+            item.setText(self.C_KEY, f"<{key}>")
+            self._changed = True
+        return
+
+    @pyqtSlot(str)
+    def _onValueEdit(self, text: str) -> None:
+        """Update the value text."""
+        if item := self._getSelectedItem():
+            item.setText(self.C_REPL, text)
+            self._changed = True
+        return
+
     @pyqtSlot()
-    def _selectionChanged(self) -> None:
+    def _onSelectionChanged(self) -> None:
         """Extract the details from the selected item and populate the
         edit form.
         """
         if item := self._getSelectedItem():
-            self.editKey.setText(self._stripNotAllowed(item.text(self.C_KEY)))
+            self.editKey.setText(self._stripKey(item.text(self.C_KEY)))
             self.editValue.setText(item.text(self.C_REPL))
             self.editKey.setEnabled(True)
             self.editValue.setEnabled(True)
@@ -748,26 +810,14 @@ class _ReplacePage(NFixedPage):
         return
 
     @pyqtSlot()
-    def _applyChanges(self) -> None:
-        """Save the form data into the list widget."""
-        if item := self._getSelectedItem():
-            key = self._stripNotAllowed(self.editKey.text())
-            value = self.editValue.text()
-            if key and value:
-                item.setText(self.C_KEY, f"<{key}>")
-                item.setText(self.C_REPL, value)
-                self._changed = True
-        return
-
-    @pyqtSlot()
-    def _addEntry(self) -> None:
+    def _onEntryCreated(self) -> None:
         """Add a new list entry."""
         key = f"<keyword{self.listBox.topLevelItemCount() + 1:d}>"
         self.listBox.addTopLevelItem(QTreeWidgetItem([key, ""]))
         return
 
     @pyqtSlot()
-    def _delEntry(self) -> None:
+    def _onEntryDeleted(self) -> None:
         """Delete the selected entry."""
         if item := self._getSelectedItem():
             self.listBox.takeTopLevelItem(self.listBox.indexOfTopLevelItem(item))
@@ -784,6 +834,6 @@ class _ReplacePage(NFixedPage):
             return items[0]
         return None
 
-    def _stripNotAllowed(self, key: str) -> str:
+    def _stripKey(self, key: str) -> str:
         """Clean up the replace key string."""
         return "".join(c for c in key if c.isalnum())

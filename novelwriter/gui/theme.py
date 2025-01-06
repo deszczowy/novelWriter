@@ -7,7 +7,7 @@ Created: 2019-05-18 [0.1.3] GuiTheme
 Created: 2019-11-08 [0.4]   GuiIcons
 
 This file is a part of novelWriter
-Copyright 2018–2024, Veronica Berglyd Olsen
+Copyright (C) 2019 Veronica Berglyd Olsen and novelWriter contributors
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -151,6 +151,9 @@ class GuiTheme:
         self.guiFont = QApplication.font()
         self.guiFontB = QApplication.font()
         self.guiFontB.setBold(True)
+        self.guiFontBU = QApplication.font()
+        self.guiFontBU.setBold(True)
+        self.guiFontBU.setUnderline(True)
         self.guiFontSmall = QApplication.font()
         self.guiFontSmall.setPointSizeF(0.9*self.guiFont.pointSizeF())
 
@@ -507,8 +510,8 @@ class GuiIcons:
         "add", "add_document", "backward", "bookmark", "browse", "checked", "close", "copy",
         "cross", "document", "down", "edit", "export", "font", "forward", "import", "list",
         "maximise", "menu", "minimise", "more", "noncheckable", "open", "panel", "quote",
-        "refresh", "remove", "revert", "search_replace", "search", "settings", "star", "unchecked",
-        "up", "view",
+        "refresh", "remove", "revert", "search_replace", "search", "settings", "star", "toolbar",
+        "unchecked", "up", "view",
 
         # Switches
         "sticky-on", "sticky-off",

@@ -6,7 +6,7 @@ File History:
 Created: 2022-10-30 [2.0rc2] NWProjectData
 
 This file is a part of novelWriter
-Copyright 2018–2024, Veronica Berglyd Olsen
+Copyright (C) 2022 Veronica Berglyd Olsen and novelWriter contributors
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -29,7 +29,8 @@ import uuid
 from typing import TYPE_CHECKING, Any
 
 from novelwriter.common import (
-    checkBool, checkInt, checkStringNone, checkUuid, isHandle, simplified
+    checkBool, checkInt, checkStringNone, checkUuid, isHandle,
+    makeFileNameSafe, simplified
 )
 from novelwriter.core.status import NWStatus
 
@@ -100,6 +101,11 @@ class NWProjectData:
     def name(self) -> str:
         """Return the project name."""
         return self._name
+
+    @property
+    def fileSafeName(self) -> str:
+        """Return the project name in a file name safe format."""
+        return makeFileNameSafe(self._name)
 
     @property
     def author(self) -> str:

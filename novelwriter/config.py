@@ -8,7 +8,7 @@ Created: 2022-11-09 [2.0rc2] RecentProjects
 Created: 2024-06-16 [2.5rc1] RecentPaths
 
 This file is a part of novelWriter
-Copyright 2018–2024, Veronica Berglyd Olsen
+Copyright (C) 2018 Veronica Berglyd Olsen and novelWriter contributors
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -40,7 +40,10 @@ from PyQt5.QtCore import (
 from PyQt5.QtGui import QFont, QFontDatabase
 from PyQt5.QtWidgets import QApplication
 
-from novelwriter.common import NWConfigParser, checkInt, checkPath, describeFont, formatTimeStamp
+from novelwriter.common import (
+    NWConfigParser, checkInt, checkPath, describeFont, fontMatcher,
+    formatTimeStamp
+)
 from novelwriter.constants import nwFiles, nwUnicode
 from novelwriter.error import formatException, logException
 
@@ -196,6 +199,7 @@ class Config:
         # State
         self.showViewerPanel = True   # The panel for the viewer is visible
         self.showEditToolBar = False  # The document editor toolbar visibility
+        self.showSessionTime = True   # Show the session time in the status bar
         self.viewComments    = True   # Comments are shown in the viewer
         self.viewSynopsis    = True   # Synopsis is shown in the viewer
 
@@ -374,10 +378,11 @@ class Config:
     def setGuiFont(self, value: QFont | str | None) -> None:
         """Update the GUI's font style from settings."""
         if isinstance(value, QFont):
-            self.guiFont = value
+            self.guiFont = fontMatcher(value)
         elif value and isinstance(value, str):
-            self.guiFont = QFont()
-            self.guiFont.fromString(value)
+            font = QFont()
+            font.fromString(value)
+            self.guiFont = fontMatcher(font)
         else:
             font = QFont()
             fontDB = QFontDatabase()
@@ -387,11 +392,9 @@ class Config:
                 font.setPointSize(10)
             else:
                 font = fontDB.systemFont(QFontDatabase.SystemFont.GeneralFont)
-            self.guiFont = font
+            self.guiFont = fontMatcher(font)
             logger.debug("GUI font set to: %s", describeFont(font))
-
         QApplication.setFont(self.guiFont)
-
         return
 
     def setTextFont(self, value: QFont | str | None) -> None:
@@ -399,10 +402,11 @@ class Config:
         set to default font.
         """
         if isinstance(value, QFont):
-            self.textFont = value
+            self.textFont = fontMatcher(value)
         elif value and isinstance(value, str):
-            self.textFont = QFont()
-            self.textFont.fromString(value)
+            font = QFont()
+            font.fromString(value)
+            self.textFont = fontMatcher(font)
         else:
             fontDB = QFontDatabase()
             fontFam = fontDB.families()
@@ -416,8 +420,8 @@ class Config:
                 font.setPointSize(12)
             else:
                 font = fontDB.systemFont(QFontDatabase.SystemFont.GeneralFont)
-            self.textFont = font
-            logger.debug("Text font set to: %s", describeFont(font))
+            self.textFont = fontMatcher(font)
+            logger.debug("Text font set to: %s", describeFont(self.textFont))
         return
 
     ##
@@ -683,6 +687,7 @@ class Config:
         sec = "State"
         self.showViewerPanel = conf.rdBool(sec, "showviewerpanel", self.showViewerPanel)
         self.showEditToolBar = conf.rdBool(sec, "showedittoolbar", self.showEditToolBar)
+        self.showSessionTime = conf.rdBool(sec, "showsessiontime", self.showSessionTime)
         self.viewComments    = conf.rdBool(sec, "viewcomments", self.viewComments)
         self.viewSynopsis    = conf.rdBool(sec, "viewsynopsis", self.viewSynopsis)
         self.searchCase      = conf.rdBool(sec, "searchcase", self.searchCase)
@@ -793,6 +798,7 @@ class Config:
         conf["State"] = {
             "showviewerpanel": str(self.showViewerPanel),
             "showedittoolbar": str(self.showEditToolBar),
+            "showsessiontime": str(self.showSessionTime),
             "viewcomments":    str(self.viewComments),
             "viewsynopsis":    str(self.viewSynopsis),
             "searchcase":      str(self.searchCase),

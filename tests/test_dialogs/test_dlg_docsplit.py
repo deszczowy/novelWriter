@@ -3,7 +3,7 @@ novelWriter – Merge and Split Dialog Classes Tester
 ===================================================
 
 This file is a part of novelWriter
-Copyright 2018–2024, Veronica Berglyd Olsen
+Copyright (C) 2020 Veronica Berglyd Olsen and novelWriter contributors
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -38,8 +38,6 @@ def testDlgSplit_Main(qtbot, monkeypatch, nwGUI, projPath, mockRnd):
     buildTestProject(nwGUI, projPath)
 
     project = SHARED.project
-    projTree = nwGUI.projView.projTree
-
     docText = (
         "Text\n\n"
         "##! Prologue\n\nText\n\n"
@@ -58,7 +56,6 @@ def testDlgSplit_Main(qtbot, monkeypatch, nwGUI, projPath, mockRnd):
     hSplitDoc = project.newFile("Split Doc", C.hNovelRoot)
     assert hSplitDoc is not None
     project.writeNewFile(hSplitDoc, 1, True, docText)
-    projTree.revealNewTreeItem(hSplitDoc, nHandle=C.hNovelRoot, wordCount=True)
 
     docText = f"# Split Doc\n\n{docText}"
 

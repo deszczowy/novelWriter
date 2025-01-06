@@ -3,7 +3,7 @@ novelWriter – Main GUI Editor Class Tester
 ==========================================
 
 This file is a part of novelWriter
-Copyright 2018–2024, Veronica Berglyd Olsen
+Copyright (C) 2020 Veronica Berglyd Olsen and novelWriter contributors
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -24,22 +24,23 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from PyQt5.QtCore import QEvent, Qt, QThreadPool, QUrl
+from PyQt5.QtCore import QEvent, QMimeData, Qt, QThreadPool, QUrl
 from PyQt5.QtGui import (
-    QClipboard, QDesktopServices, QFont, QMouseEvent, QTextBlock, QTextCursor,
-    QTextOption
+    QClipboard, QDesktopServices, QDragEnterEvent, QDragMoveEvent, QDropEvent,
+    QFont, QMouseEvent, QTextBlock, QTextCursor, QTextOption
 )
-from PyQt5.QtWidgets import QAction, QApplication, QMenu
+from PyQt5.QtWidgets import QAction, QApplication, QMenu, QPlainTextEdit
 
 from novelwriter import CONFIG, SHARED
+from novelwriter.common import decodeMimeHandles
 from novelwriter.constants import nwKeyWords, nwUnicode
 from novelwriter.dialogs.editlabel import GuiEditLabel
 from novelwriter.enum import nwDocAction, nwDocInsert, nwItemClass, nwItemLayout, nwTrinary
 from novelwriter.gui.doceditor import GuiDocEditor
 from novelwriter.text.counting import standardCounter
 from novelwriter.types import (
-    QtAlignJustify, QtAlignLeft, QtKeepAnchor, QtModCtrl, QtMouseLeft,
-    QtMoveAnchor, QtMoveRight, QtScrollAlwaysOff, QtScrollAsNeeded
+    QtAlignJustify, QtAlignLeft, QtKeepAnchor, QtModCtrl, QtModNone,
+    QtMouseLeft, QtMoveAnchor, QtMoveRight, QtScrollAlwaysOff, QtScrollAsNeeded
 )
 
 from tests.mocked import causeOSError
@@ -80,9 +81,9 @@ def testGuiEditor_Init(qtbot, nwGUI, projPath, ipsumText, mockRnd):
     assert qDoc.defaultTextOption().alignment() == QtAlignLeft
     assert docEditor.verticalScrollBarPolicy() == QtScrollAsNeeded
     assert docEditor.horizontalScrollBarPolicy() == QtScrollAsNeeded
-    assert docEditor._typConf.typPadChar == nwUnicode.U_NBSP
+    assert docEditor._autoReplace._padChar == nwUnicode.U_NBSP
     assert docEditor.docHeader.itemTitle.text() == (
-        "Novel  \u203a  New Chapter  \u203a  New Scene"
+        "Novel  \u203a  New Folder  \u203a  New Scene"
     )
     assert docEditor.docHeader._docOutline == {0: "### New Scene"}
 
@@ -105,7 +106,7 @@ def testGuiEditor_Init(qtbot, nwGUI, projPath, ipsumText, mockRnd):
     assert qDoc.defaultTextOption().flags() & QTextOption.ShowLineAndParagraphSeparators
     assert docEditor.verticalScrollBarPolicy() == QtScrollAlwaysOff
     assert docEditor.horizontalScrollBarPolicy() == QtScrollAlwaysOff
-    assert docEditor._typConf.typPadChar == nwUnicode.U_THNBSP
+    assert docEditor._autoReplace._padChar == nwUnicode.U_THNBSP
     assert docEditor.docHeader.itemTitle.text() == "New Scene"
 
     # Header
@@ -207,6 +208,74 @@ def testGuiEditor_SaveText(qtbot, monkeypatch, caplog, nwGUI, projPath, ipsumTex
     assert docEditor.saveText() is True
 
     # qtbot.stop()
+
+
+@pytest.mark.gui
+def testGuiEditor_DragAndDrop(qtbot, monkeypatch, nwGUI, projPath, mockRnd):
+    """Test drag and drop in the editor."""
+    docEditor = nwGUI.docEditor
+
+    buildTestProject(nwGUI, projPath)
+    assert nwGUI.openDocument(C.hTitlePage) is True
+    assert docEditor.docHandle == C.hTitlePage
+
+    middle = docEditor.viewport().rect().center()
+    action = Qt.DropAction.MoveAction
+    mouse = Qt.MouseButton.NoButton
+
+    model = SHARED.project.tree.model
+    docMime = model.mimeData([model.indexFromHandle(C.hSceneDoc)])
+    noneMime = QMimeData()
+    noneMime.setData("plain/text", b"")
+    assert decodeMimeHandles(docMime) == [C.hSceneDoc]
+
+    # Drag Enter
+    mockEnter = MagicMock()
+    docEvent = QDragEnterEvent(middle, action, docMime, mouse, QtModNone)
+    noneEvent = QDragEnterEvent(middle, action, noneMime, mouse, QtModNone)
+    with monkeypatch.context() as mp:
+        mp.setattr(QPlainTextEdit, "dragEnterEvent", mockEnter)
+
+        # Document Enter
+        docEditor.dragEnterEvent(docEvent)
+        assert docEvent.isAccepted() is True
+        assert mockEnter.call_count == 0
+
+        # Regular Enter
+        docEditor.dragEnterEvent(noneEvent)
+        assert mockEnter.call_count == 1
+
+    # Drag Move
+    mockMove = MagicMock()
+    docEvent = QDragMoveEvent(middle, action, docMime, mouse, QtModNone)
+    noneEvent = QDragMoveEvent(middle, action, noneMime, mouse, QtModNone)
+    with monkeypatch.context() as mp:
+        mp.setattr(QPlainTextEdit, "dragMoveEvent", mockMove)
+
+        # Document Move
+        docEditor.dragMoveEvent(docEvent)
+        assert docEvent.isAccepted() is True
+        assert mockMove.call_count == 0
+
+        # Regular Move
+        docEditor.dragMoveEvent(noneEvent)
+        assert mockMove.call_count == 1
+
+    # Drop
+    mockDrop = MagicMock()
+    docEvent = QDropEvent(middle, action, docMime, mouse, QtModNone)
+    noneEvent = QDropEvent(middle, action, noneMime, mouse, QtModNone)
+    with monkeypatch.context() as mp:
+        mp.setattr(QPlainTextEdit, "dropEvent", mockDrop)
+
+        # Document Drop
+        docEditor.dropEvent(docEvent)
+        assert mockDrop.call_count == 0
+        assert docEditor.docHandle == C.hSceneDoc
+
+        # Regular Move
+        docEditor.dropEvent(noneEvent)
+        assert mockDrop.call_count == 1
 
 
 @pytest.mark.gui
@@ -1615,7 +1684,6 @@ def testGuiEditor_Tags(qtbot, nwGUI, projPath, ipsumText, mockRnd):
     assert nwGUI.openDocument(cHandle) is True
     docEditor.replaceText(text)
     nwGUI.saveDocument()
-    assert nwGUI.projView.projTree.revealNewTreeItem(cHandle)
 
     # Follow Tag
     # ==========
@@ -1715,7 +1783,6 @@ def testGuiEditor_Completer(qtbot, nwGUI, projPath, mockRnd):
     assert nwGUI.openDocument(cHandle) is True
     docEditor.replaceText(text)
     nwGUI.saveDocument()
-    assert nwGUI.projView.projTree.revealNewTreeItem(cHandle)
 
     docEditor.replaceText("")
     completer = docEditor._completer
@@ -1850,8 +1917,8 @@ def testGuiEditor_WordCounters(qtbot, monkeypatch, nwGUI, projPath, ipsumText, m
 
     threadPool = MockThreadPool()
     monkeypatch.setattr(QThreadPool, "globalInstance", lambda *a: threadPool)
-    docEditor.timerDoc.blockSignals(True)
-    docEditor.timerSel.blockSignals(True)
+    docEditor._timerDoc.blockSignals(True)
+    docEditor._timerSel.blockSignals(True)
 
     buildTestProject(nwGUI, projPath)
 
@@ -1877,20 +1944,20 @@ def testGuiEditor_WordCounters(qtbot, monkeypatch, nwGUI, projPath, ipsumText, m
 
     # Check that a busy counter is blocked
     with monkeypatch.context() as mp:
-        mp.setattr(docEditor.wCounterDoc, "isRunning", lambda *a: True)
+        mp.setattr(docEditor._wCounterDoc, "isRunning", lambda *a: True)
         docEditor._runDocumentTasks()
         assert docEditor.docFooter.wordsText.text() == "Words: 0 (+0)"
 
     with monkeypatch.context() as mp:
-        mp.setattr(docEditor.wCounterSel, "isRunning", lambda *a: True)
+        mp.setattr(docEditor._wCounterSel, "isRunning", lambda *a: True)
         docEditor._runSelCounter()
         assert docEditor.docFooter.wordsText.text() == "Words: 0 (+0)"
 
     # Run the full word counter
     docEditor._runDocumentTasks()
-    assert threadPool.objectID() == id(docEditor.wCounterDoc)
+    assert threadPool.objectID() == id(docEditor._wCounterDoc)
 
-    docEditor.wCounterDoc.run()
+    docEditor._wCounterDoc.run()
     # docEditor._updateDocCounts(cC, wC, pC)
     assert SHARED.project.tree[C.hSceneDoc]._charCount == cC  # type: ignore
     assert SHARED.project.tree[C.hSceneDoc]._wordCount == wC  # type: ignore
@@ -1900,9 +1967,9 @@ def testGuiEditor_WordCounters(qtbot, monkeypatch, nwGUI, projPath, ipsumText, m
     # Select all text and run the selection word counter
     docEditor.docAction(nwDocAction.SEL_ALL)
     docEditor._runSelCounter()
-    assert threadPool.objectID() == id(docEditor.wCounterSel)
+    assert threadPool.objectID() == id(docEditor._wCounterSel)
 
-    docEditor.wCounterSel.run()
+    docEditor._wCounterSel.run()
     assert docEditor.docFooter.wordsText.text() == f"Words: {wC} selected"
 
     # qtbot.stop()

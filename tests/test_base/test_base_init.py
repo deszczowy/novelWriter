@@ -3,7 +3,7 @@ novelWriter – Main Init Tester
 ==============================
 
 This file is a part of novelWriter
-Copyright 2018–2024, Veronica Berglyd Olsen
+Copyright (C) 2020 Veronica Berglyd Olsen and novelWriter contributors
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -97,7 +97,22 @@ def testBaseInit_Options(monkeypatch, fncPath):
     assert logger.getEffectiveLevel() == logging.WARNING
     assert nwGUI.closeMain() == "closeMain"
 
-    # Log Levels
+    # Log Levels w/Color
+    nwGUI = main(
+        ["--testmode", "--info", "--color", f"--config={fncPath}", f"--data={fncPath}"]
+    )
+    assert nwGUI is not None
+    assert logger.getEffectiveLevel() == logging.INFO
+    assert nwGUI.closeMain() == "closeMain"
+
+    nwGUI = main(
+        ["--testmode", "--debug", "--color", f"--config={fncPath}", f"--data={fncPath}"]
+    )
+    assert nwGUI is not None
+    assert logger.getEffectiveLevel() == logging.DEBUG
+    assert nwGUI.closeMain() == "closeMain"
+
+    # Log Levels wo/Color
     nwGUI = main(
         ["--testmode", "--info", f"--config={fncPath}", f"--data={fncPath}"]
     )

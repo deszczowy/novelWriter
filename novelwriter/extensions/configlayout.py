@@ -10,7 +10,7 @@ Created: 2024-01-26 [2.3b1] NFixedPage
 Created: 2024-03-12 [2.4b1] NWrappedWidgetBox
 
 This file is a part of novelWriter
-Copyright 2018–2024, Veronica Berglyd Olsen
+Copyright (C) 2023 Veronica Berglyd Olsen and novelWriter contributors
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -183,7 +183,7 @@ class NScrollableForm(QScrollArea):
     def addRow(
         self,
         label: str | None,
-        widget: QWidget | list[QWidget | QPixmap | str | int],
+        widget: QWidget | list[QWidget | QPixmap | int],
         helpText: str = "",
         unit: str | None = None,
         button: QWidget | None = None,
@@ -204,8 +204,6 @@ class NScrollableForm(QScrollArea):
                     icon = QLabel(self)
                     icon.setPixmap(item)
                     wBox.addWidget(icon)
-                elif isinstance(item, str):
-                    wBox.addWidget(QLabel(item, self))
                 elif isinstance(item, int):
                     wBox.addSpacing(CONFIG.pxInt(item))
             qWidget = QWidget(self)
