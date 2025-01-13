@@ -29,18 +29,15 @@ import logging
 import random
 
 from collections.abc import Iterable
-from typing import TYPE_CHECKING, Literal
+from typing import Literal, TypeGuard
 
-from PyQt5.QtCore import QPointF, Qt
-from PyQt5.QtGui import QColor, QIcon, QPainter, QPainterPath, QPixmap, QPolygonF
+from PyQt6.QtCore import QPointF, Qt
+from PyQt6.QtGui import QColor, QIcon, QPainter, QPainterPath, QPixmap, QPolygonF
 
 from novelwriter import SHARED
 from novelwriter.common import simplified
 from novelwriter.enum import nwStatusShape
-from novelwriter.types import QtPaintAnitAlias, QtTransparent
-
-if TYPE_CHECKING:  # pragma: no cover
-    from typing import TypeGuard  # Requires Python 3.10
+from novelwriter.types import QtPaintAntiAlias, QtTransparent
 
 logger = logging.getLogger(__name__)
 
@@ -65,10 +62,8 @@ class StatusEntry:
 
 NO_ENTRY = StatusEntry("", QColor(0, 0, 0), nwStatusShape.SQUARE, QIcon(), 0)
 
-if TYPE_CHECKING:  # pragma: no cover
-    # Requires Python 3.10
-    T_UpdateEntry = list[tuple[str | None, StatusEntry]]
-    T_StatusKind = Literal["s", "i"]
+T_UpdateEntry = list[tuple[str | None, StatusEntry]]
+T_StatusKind = Literal["s", "i"]
 
 
 class NWStatus:
@@ -195,7 +190,7 @@ class NWStatus:
         pixmap.fill(QtTransparent)
 
         painter = QPainter(pixmap)
-        painter.setRenderHint(QtPaintAnitAlias)
+        painter.setRenderHint(QtPaintAntiAlias)
         painter.fillPath(_SHAPES.getShape(shape), color)
         painter.end()
 

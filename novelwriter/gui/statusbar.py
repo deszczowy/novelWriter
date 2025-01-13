@@ -28,8 +28,8 @@ import logging
 from datetime import datetime
 from time import time
 
-from PyQt5.QtCore import QLocale, pyqtSlot
-from PyQt5.QtWidgets import QApplication, QLabel, QStatusBar, QWidget
+from PyQt6.QtCore import QLocale, pyqtSlot
+from PyQt6.QtWidgets import QApplication, QLabel, QStatusBar, QWidget
 
 from novelwriter import CONFIG, SHARED
 from novelwriter.common import formatTime
@@ -129,10 +129,10 @@ class GuiMainStatus(QStatusBar):
     def updateTheme(self) -> None:
         """Update theme elements."""
         iPx = SHARED.theme.baseIconHeight
-        self.langIcon.setPixmap(SHARED.theme.getPixmap("status_lang", (iPx, iPx)))
-        self.statsIcon.setPixmap(SHARED.theme.getPixmap("status_stats", (iPx, iPx)))
-        self.timePixmap = SHARED.theme.getPixmap("status_time", (iPx, iPx))
-        self.idlePixmap = SHARED.theme.getPixmap("status_idle", (iPx, iPx))
+        self.langIcon.setPixmap(SHARED.theme.getPixmap("language", (iPx, iPx)))
+        self.statsIcon.setPixmap(SHARED.theme.getPixmap("stats", (iPx, iPx)))
+        self.timePixmap = SHARED.theme.getPixmap("timer", (iPx, iPx))
+        self.idlePixmap = SHARED.theme.getPixmap("timer_off", (iPx, iPx))
         self.timeIcon.setPixmap(self.timePixmap)
 
         colNone = SHARED.theme.statNone

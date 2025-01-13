@@ -33,9 +33,10 @@ import logging
 from enum import Enum
 from time import time
 
-from PyQt5.QtCore import QT_TRANSLATE_NOOP, Qt, pyqtSignal, pyqtSlot
-from PyQt5.QtWidgets import (
-    QAbstractItemView, QAction, QFileDialog, QFrame, QGridLayout, QGroupBox,
+from PyQt6.QtCore import QT_TRANSLATE_NOOP, Qt, pyqtSignal, pyqtSlot
+from PyQt6.QtGui import QAction, QIcon
+from PyQt6.QtWidgets import (
+    QAbstractItemView, QFileDialog, QFrame, QGridLayout, QGroupBox,
     QHBoxLayout, QLabel, QMenu, QScrollArea, QSplitter, QToolBar, QToolButton,
     QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget
 )
@@ -103,7 +104,10 @@ class GuiOutlineView(QWidget):
     def updateTheme(self) -> None:
         """Update theme elements."""
         self.outlineBar.updateTheme()
-        self.refreshTree()
+        self.outlineTree.updateTheme()
+        self.outlineTree.refreshTree(
+            rootHandle=SHARED.project.data.getLastHandle("outline"), overRide=True
+        )
         return
 
     def initSettings(self) -> None:
@@ -268,9 +272,9 @@ class GuiOutlineToolBar(QToolBar):
         """Update theme elements."""
         self.setStyleSheet("QToolBar {border: 0px;}")
         self.novelValue.refreshNovelList()
-        self.aRefresh.setIcon(SHARED.theme.getIcon("refresh"))
-        self.aExport.setIcon(SHARED.theme.getIcon("export"))
-        self.tbColumns.setIcon(SHARED.theme.getIcon("menu"))
+        self.aRefresh.setIcon(SHARED.theme.getIcon("refresh", "green"))
+        self.aExport.setIcon(SHARED.theme.getIcon("export", "blue"))
+        self.tbColumns.setIcon(SHARED.theme.getIcon("more_vertical"))
         self.tbColumns.setStyleSheet("QToolButton::menu-indicator {image: none;}")
         self.novelLabel.setTextColors(color=self.palette().windowText().color())
         return
@@ -397,18 +401,8 @@ class GuiOutlineTree(QTreeWidget):
         fH2 = self.font()
         fH2.setBold(True)
 
-        iType = nwItemType.FILE
-        iClass = nwItemClass.NO_CLASS
-        iLayout = nwItemLayout.DOCUMENT
-
         self._hFonts = [self.font(), fH1, fH2, self.font(), self.font()]
-        self._dIcon = {
-            "H0": SHARED.theme.getItemIcon(iType, iClass, iLayout, "H0"),
-            "H1": SHARED.theme.getItemIcon(iType, iClass, iLayout, "H1"),
-            "H2": SHARED.theme.getItemIcon(iType, iClass, iLayout, "H2"),
-            "H3": SHARED.theme.getItemIcon(iType, iClass, iLayout, "H3"),
-            "H4": SHARED.theme.getItemIcon(iType, iClass, iLayout, "H4"),
-        }
+        self._dIcon: dict[str, QIcon] = {}
 
         # Internals
         self._treeOrder = []
@@ -419,6 +413,7 @@ class GuiOutlineTree(QTreeWidget):
         self._firstView = True
         self._lastBuild = 0
 
+        self.updateTheme()
         self.initSettings()
         self.clearContent()
 
@@ -478,6 +473,20 @@ class GuiOutlineTree(QTreeWidget):
 
         self._treeNCols = len(self._treeOrder)
 
+        return
+
+    def updateTheme(self) -> None:
+        """Update theme elements."""
+        iType = nwItemType.FILE
+        iClass = nwItemClass.NO_CLASS
+        iLayout = nwItemLayout.DOCUMENT
+        self._dIcon = {
+            "H0": SHARED.theme.getItemIcon(iType, iClass, iLayout, "H0"),
+            "H1": SHARED.theme.getItemIcon(iType, iClass, iLayout, "H1"),
+            "H2": SHARED.theme.getItemIcon(iType, iClass, iLayout, "H2"),
+            "H3": SHARED.theme.getItemIcon(iType, iClass, iLayout, "H3"),
+            "H4": SHARED.theme.getItemIcon(iType, iClass, iLayout, "H4"),
+        }
         return
 
     def refreshTree(
@@ -815,8 +824,8 @@ class GuiOutlineDetails(QScrollArea):
 
         bFont = SHARED.theme.guiFontB
 
-        trStats1 = trConst(nwLabels.STATS_NAME[nwStats.CHARS_ALL])
-        trStats2 = trConst(nwLabels.STATS_NAME[nwStats.WORDS_ALL])
+        trStats1 = trConst(nwLabels.STATS_NAME[nwStats.CHARS])
+        trStats2 = trConst(nwLabels.STATS_NAME[nwStats.WORDS])
         trStats3 = trConst(nwLabels.STATS_NAME[nwStats.PARAGRAPHS])
 
         # Details Area

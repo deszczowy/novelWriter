@@ -35,6 +35,8 @@ import zipfile
 
 from pathlib import Path
 
+from utils.icon_themes import processFontAwesome, processMaterialIcons, processRemix
+
 CURR_DIR = Path(__file__).parent
 SETUP_DIR = CURR_DIR / "setup"
 SIGN_KEY = "D6A9F6B8F227CF7C6F6D1EE84DBBE4B734B0BD08"
@@ -327,6 +329,90 @@ def buildSampleZip(args: argparse.Namespace | None = None) -> None:
 #  Import Translations (import-i18n)
 ##
 
+def buildIconTheme(args: argparse.Namespace) -> None:
+    """Build icon themes."""
+    print("")
+    print("Build Icon Themes")
+    print("=================")
+    print("")
+
+    workDir = Path(args.sources).absolute()
+    if not workDir.is_dir():
+        print(f"Source directory not found: {workDir}")
+        sys.exit(1)
+
+    iconsDir = CURR_DIR / "novelwriter" / "assets" / "icons"
+
+    style = args.style
+    if style in ("all", "material"):
+        processMaterialIcons(workDir, iconsDir, {
+            "material_rounded_thin": {
+                "name": "Material Symbols - Rounded Thin",
+                "style": "rounded",
+                "filled": False,
+                "weight": 200,
+            },
+            "material_rounded_normal": {
+                "name": "Material Symbols - Rounded Medium",
+                "style": "rounded",
+                "filled": False,
+                "weight": 400,
+            },
+            "material_rounded_bold": {
+                "name": "Material Symbols - Rounded Bold",
+                "style": "rounded",
+                "filled": False,
+                "weight": 600,
+            },
+            "material_filled_thin": {
+                "name": "Material Symbols - Filled Thin",
+                "style": "rounded",
+                "filled": True,
+                "weight": 200,
+            },
+            "material_filled_normal": {
+                "name": "Material Symbols - Filled Medium",
+                "style": "rounded",
+                "filled": True,
+                "weight": 400,
+            },
+            "material_filled_bold": {
+                "name": "Material Symbols - Filled Bold",
+                "style": "rounded",
+                "filled": True,
+                "weight": 600,
+            },
+        })
+
+    if style in ("all", "fa"):
+        processFontAwesome(workDir, iconsDir, {
+            "font_awesome": {
+                "name": "Font Awesome 6",
+            },
+        })
+
+    if style in ("all", "remix"):
+        processRemix(workDir, iconsDir, {
+            "remix_outline": {
+                "name": "Remix Icon - Outline",
+                "filled": False,
+            },
+            "remix_filled": {
+                "name": "Remix Icon - Filled",
+                "filled": True,
+            },
+        })
+
+    print("Done")
+    print("")
+
+    return
+
+
+##
+#  Import Translations (import-i18n)
+##
+
 def importI18nUpdates(args: argparse.Namespace) -> None:
     """Import new translation files from a zip file."""
     print("")
@@ -457,8 +543,8 @@ def buildTranslationAssets(args: argparse.Namespace | None = None) -> None:
     try:
         subprocess.call(["lrelease", "-verbose", *srcList])
     except Exception as exc:
-        print("Qt5 Linguist tools seem to be missing")
-        print("On Debian/Ubuntu, install: qttools5-dev-tools pyqt5-dev-tools")
+        print("Qt Linguist tools seem to be missing")
+        print("On Debian/Ubuntu, install: qttools5-dev-tools")
         print(str(exc))
         sys.exit(1)
 
@@ -1413,6 +1499,14 @@ if __name__ == "__main__":
 
     # Additional Builds
     # =================
+
+    # Build Icons
+    cmdIcons = parsers.add_parser(
+        "icons", help="Build icon theme files from source."
+    )
+    cmdIcons.add_argument("sources", help="Working directory for sources.")
+    cmdIcons.add_argument("style", help="What icon style to build.")
+    cmdIcons.set_defaults(func=buildIconTheme)
 
     # Import Translations
     cmdImportTS = parsers.add_parser(

@@ -28,20 +28,19 @@ import logging
 from datetime import datetime
 from pathlib import Path
 
-from PyQt5.QtCore import (
-    QAbstractListModel, QEvent, QModelIndex, QObject, QPoint, QSize, Qt,
-    pyqtSignal, pyqtSlot
+from PyQt6.QtCore import (
+    QAbstractListModel, QModelIndex, QObject, QPoint, QSize, Qt, pyqtSignal,
+    pyqtSlot
 )
-from PyQt5.QtGui import QCloseEvent, QColor, QFont, QPainter, QPaintEvent, QPen
-from PyQt5.QtWidgets import (
-    QAction, QApplication, QFileDialog, QFormLayout, QHBoxLayout, QLabel,
-    QLineEdit, QListView, QMenu, QPushButton, QScrollArea, QShortcut,
-    QStackedWidget, QStyledItemDelegate, QStyleOptionViewItem, QVBoxLayout,
-    QWidget
+from PyQt6.QtGui import QAction, QCloseEvent, QColor, QFont, QPainter, QPaintEvent, QPen, QShortcut
+from PyQt6.QtWidgets import (
+    QApplication, QFileDialog, QFormLayout, QHBoxLayout, QLabel, QLineEdit,
+    QListView, QMenu, QPushButton, QScrollArea, QStackedWidget,
+    QStyledItemDelegate, QStyleOptionViewItem, QVBoxLayout, QWidget
 )
 
 from novelwriter import CONFIG, SHARED
-from novelwriter.common import cssCol, formatInt, makeFileNameSafe
+from novelwriter.common import cssCol, formatInt, makeFileNameSafe, qtLambda
 from novelwriter.constants import nwFiles
 from novelwriter.core.coretools import ProjectBuilder
 from novelwriter.enum import nwItemClass
@@ -86,7 +85,7 @@ class GuiWelcome(NDialog):
 
         self.bgImage = SHARED.theme.loadDecoration("welcome")
         self.nwImage = SHARED.theme.loadDecoration("nw-text", h=hD)
-        self.bgColor = QColor(255, 255, 255) if SHARED.theme.isLightTheme else QColor(54, 54, 54)
+        self.bgColor = QColor(54, 54, 54) if SHARED.theme.isDarkTheme else QColor(255, 255, 255)
 
         self.nwLogo = QLabel(self)
         self.nwLogo.setPixmap(SHARED.theme.getPixmap("novelwriter", (hF, hF)))
@@ -110,32 +109,32 @@ class GuiWelcome(NDialog):
         # =======
 
         self.btnList = QPushButton(self.tr("List"), self)
-        self.btnList.setIcon(SHARED.theme.getIcon("list"))
+        self.btnList.setIcon(SHARED.theme.getIcon("list", "blue"))
         self.btnList.setIconSize(btnIconSize)
         self.btnList.clicked.connect(self._showOpenProjectPage)
 
         self.btnNew = QPushButton(self.tr("New"), self)
-        self.btnNew.setIcon(SHARED.theme.getIcon("add"))
+        self.btnNew.setIcon(SHARED.theme.getIcon("add", "green"))
         self.btnNew.setIconSize(btnIconSize)
         self.btnNew.clicked.connect(self._showNewProjectPage)
 
         self.btnBrowse = QPushButton(self.tr("Browse"), self)
-        self.btnBrowse.setIcon(SHARED.theme.getIcon("browse"))
+        self.btnBrowse.setIcon(SHARED.theme.getIcon("browse", "yellow"))
         self.btnBrowse.setIconSize(btnIconSize)
         self.btnBrowse.clicked.connect(self._browseForProject)
 
         self.btnCancel = QPushButton(self.tr("Cancel"), self)
-        self.btnCancel.setIcon(SHARED.theme.getIcon("cross"))
+        self.btnCancel.setIcon(SHARED.theme.getIcon("cancel", "red"))
         self.btnCancel.setIconSize(btnIconSize)
-        self.btnCancel.clicked.connect(self.close)
+        self.btnCancel.clicked.connect(qtLambda(self.close))
 
         self.btnCreate = QPushButton(self.tr("Create"), self)
-        self.btnCreate.setIcon(SHARED.theme.getIcon("star"))
+        self.btnCreate.setIcon(SHARED.theme.getIcon("star", "yellow"))
         self.btnCreate.setIconSize(btnIconSize)
         self.btnCreate.clicked.connect(self.tabNew.createNewProject)
 
         self.btnOpen = QPushButton(self.tr("Open"), self)
-        self.btnOpen.setIcon(SHARED.theme.getIcon("open"))
+        self.btnOpen.setIcon(SHARED.theme.getIcon("open", "blue"))
         self.btnOpen.setIconSize(btnIconSize)
         self.btnOpen.clicked.connect(self._openSelectedItem)
 
@@ -289,7 +288,7 @@ class _OpenProjectPage(QWidget):
 
         # Info / Tool
         self.aMissing = QAction(self)
-        self.aMissing.setIcon(SHARED.theme.getIcon("alert_warn"))
+        self.aMissing.setIcon(SHARED.theme.getIcon("alert_warn", "orange"))
         self.aMissing.setToolTip(self.tr("The project path is not reachable."))
 
         self.selectedPath = QLineEdit(self)
@@ -589,20 +588,20 @@ class _NewProjectForm(QWidget):
         self.projFill = QLineEdit(self)
         self.projFill.setReadOnly(True)
 
-        self.browseFill = NIconToolButton(self, iSz, "add_document")
+        self.browseFill = NIconToolButton(self, iSz, "document_add", "blue")
 
-        self.fillMenu = _PopLeftDirectionMenu(self.browseFill)
+        self.fillMenu = QMenu(self.browseFill)
 
         self.fillBlank = self.fillMenu.addAction(self.tr("Create a fresh project"))
         self.fillBlank.setIcon(SHARED.theme.getIcon("document"))
         self.fillBlank.triggered.connect(self._setFillBlank)
 
         self.fillSample = self.fillMenu.addAction(self.tr("Create an example project"))
-        self.fillSample.setIcon(SHARED.theme.getIcon("add_document"))
+        self.fillSample.setIcon(SHARED.theme.getIcon("document_add", "blue"))
         self.fillSample.triggered.connect(self._setFillSample)
 
         self.fillCopy = self.fillMenu.addAction(self.tr("Copy an existing project"))
-        self.fillCopy.setIcon(SHARED.theme.getIcon("browse"))
+        self.fillCopy.setIcon(SHARED.theme.getIcon("project_copy", "green"))
         self.fillCopy.triggered.connect(self._setFillCopy)
 
         self.browseFill.setMenu(self.fillMenu)
@@ -803,14 +802,3 @@ class _NewProjectForm(QWidget):
         self.extraWidget.setVisible(self._fillMode == self.FILL_BLANK)
 
         return
-
-
-class _PopLeftDirectionMenu(QMenu):
-
-    def event(self, event: QEvent) -> bool:
-        """Overload the show event and move the menu popup location."""
-        if event.type() == QEvent.Type.Show:
-            if isinstance(parent := self.parent(), QWidget):
-                offset = QPoint(parent.width() - self.width(), parent.height())
-                self.move(parent.mapToGlobal(offset))
-        return super(_PopLeftDirectionMenu, self).event(event)

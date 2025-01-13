@@ -29,9 +29,9 @@ import sys
 
 from typing import TYPE_CHECKING
 
-from PyQt5.QtCore import Qt, pyqtSlot
-from PyQt5.QtGui import QFont, QFontDatabase
-from PyQt5.QtWidgets import (
+from PyQt6.QtCore import Qt, pyqtSlot
+from PyQt6.QtGui import QFont, QFontDatabase
+from PyQt6.QtWidgets import (
     QApplication, QDialog, QDialogButtonBox, QGridLayout, QLabel,
     QPlainTextEdit, QStyle, QWidget
 )
@@ -76,7 +76,7 @@ class NWErrorMessage(QDialog):
 
         font = QFont()
         font.setPointSize(round(0.9*self.font().pointSize()))
-        font.setFamily(QFontDatabase.systemFont(QFontDatabase.FixedFont).family())
+        font.setFamily(QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont).family())
 
         self.msgBody = QPlainTextEdit()
         self.msgBody.setFont(font)
@@ -118,7 +118,7 @@ class NWErrorMessage(QDialog):
         """
         from traceback import format_tb
 
-        from PyQt5.QtCore import PYQT_VERSION_STR, QT_VERSION_STR, QSysInfo
+        from PyQt6.QtCore import PYQT_VERSION_STR, QT_VERSION_STR, QSysInfo
 
         from novelwriter import __version__
         from novelwriter.constants import nwConst
@@ -174,7 +174,7 @@ def exceptionHandler(exType: type, exValue: BaseException, exTrace: TracebackTyp
     """Function to catch unhandled global exceptions."""
     from traceback import print_tb
 
-    from PyQt5.QtWidgets import QApplication
+    from PyQt6.QtWidgets import QApplication
 
     logger.critical("%s: %s", exType.__name__, str(exValue))
     print_tb(exTrace)

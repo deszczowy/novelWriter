@@ -25,15 +25,15 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 """
 from __future__ import annotations
 
-from PyQt5.QtCore import QPoint, QRectF, QSize, Qt, pyqtSignal, pyqtSlot
-from PyQt5.QtGui import QColor, QPainter, QPaintEvent, QPolygon
-from PyQt5.QtWidgets import (
-    QAbstractButton, QAction, QButtonGroup, QLabel, QStyle,
-    QStyleOptionToolButton, QToolBar, QToolButton, QWidget
+from PyQt6.QtCore import QPoint, QRectF, QSize, Qt, pyqtSignal, pyqtSlot
+from PyQt6.QtGui import QAction, QColor, QPainter, QPaintEvent, QPolygon
+from PyQt6.QtWidgets import (
+    QAbstractButton, QButtonGroup, QLabel, QStyle, QStyleOptionToolButton,
+    QToolBar, QToolButton, QWidget
 )
 
 from novelwriter.types import (
-    QtAlignLeft, QtMouseOver, QtNoBrush, QtNoPen, QtPaintAnitAlias,
+    QtAlignLeft, QtMouseOver, QtNoBrush, QtNoPen, QtPaintAntiAlias,
     QtSizeExpanding, QtSizeFixed
 )
 
@@ -146,7 +146,7 @@ class _PagedToolButton(QToolButton):
         opt.initFrom(self)
 
         paint = QPainter(self)
-        paint.setRenderHint(QtPaintAnitAlias, True)
+        paint.setRenderHint(QtPaintAntiAlias, True)
         paint.setPen(QtNoPen)
         paint.setBrush(QtNoBrush)
 
@@ -213,7 +213,7 @@ class _NPagedToolLabel(QLabel):
         label that matches the button style.
         """
         paint = QPainter(self)
-        paint.setRenderHint(QtPaintAnitAlias, True)
+        paint.setRenderHint(QtPaintAntiAlias, True)
         paint.setPen(QtNoPen)
 
         width = self.width()

@@ -27,9 +27,9 @@ import logging
 
 from pathlib import Path
 
-from PyQt5.QtCore import QTimer, pyqtSlot
-from PyQt5.QtGui import QCloseEvent
-from PyQt5.QtWidgets import (
+from PyQt6.QtCore import QTimer, pyqtSlot
+from PyQt6.QtGui import QCloseEvent
+from PyQt6.QtWidgets import (
     QAbstractButton, QAbstractItemView, QDialogButtonBox, QFileDialog,
     QGridLayout, QHBoxLayout, QLabel, QLineEdit, QListWidget, QListWidgetItem,
     QPushButton, QSplitter, QVBoxLayout, QWidget
@@ -154,7 +154,7 @@ class GuiManuscriptBuild(NDialog):
         # Build Name
         self.lblName = QLabel(self.tr("File Name"), self)
         self.buildName = QLineEdit(self)
-        self.btnReset = NIconToolButton(self, iSz, "revert")
+        self.btnReset = NIconToolButton(self, iSz, "revert", "green")
         self.btnReset.setToolTip(self.tr("Reset file name to default"))
 
         self.nameBox = QHBoxLayout()
@@ -181,12 +181,16 @@ class GuiManuscriptBuild(NDialog):
         # Dialog Buttons
         self.buttonBox = QDialogButtonBox(self)
 
-        self.btnOpen = QPushButton(SHARED.theme.getIcon("browse"), self.tr("Open Folder"), self)
+        self.btnOpen = QPushButton(
+            SHARED.theme.getIcon("browse", "yellow"), self.tr("Open Folder"), self
+        )
         self.btnOpen.setIconSize(bSz)
         self.btnOpen.setAutoDefault(False)
         self.buttonBox.addButton(self.btnOpen, QtRoleAction)
 
-        self.btnBuild = QPushButton(SHARED.theme.getIcon("export"), self.tr("&Build"), self)
+        self.btnBuild = QPushButton(
+            SHARED.theme.getIcon("sb_build", "blue"), self.tr("&Build"), self
+        )
         self.btnBuild.setIconSize(bSz)
         self.btnBuild.setAutoDefault(True)
         self.buttonBox.addButton(self.btnBuild, QtRoleAction)

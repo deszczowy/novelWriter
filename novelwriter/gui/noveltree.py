@@ -30,11 +30,11 @@ import logging
 from enum import Enum
 from time import time
 
-from PyQt5.QtCore import QModelIndex, QPoint, Qt, pyqtSignal, pyqtSlot
-from PyQt5.QtGui import QFocusEvent, QFont, QMouseEvent, QPalette, QResizeEvent
-from PyQt5.QtWidgets import (
-    QAbstractItemView, QActionGroup, QFrame, QHBoxLayout, QInputDialog, QMenu,
-    QToolTip, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget
+from PyQt6.QtCore import QModelIndex, QPoint, Qt, pyqtSignal, pyqtSlot
+from PyQt6.QtGui import QActionGroup, QFocusEvent, QFont, QMouseEvent, QPalette, QResizeEvent
+from PyQt6.QtWidgets import (
+    QAbstractItemView, QFrame, QHBoxLayout, QInputDialog, QMenu, QToolTip,
+    QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget
 )
 
 from novelwriter import CONFIG, SHARED
@@ -267,9 +267,9 @@ class GuiNovelToolBar(QWidget):
     def updateTheme(self) -> None:
         """Update theme elements."""
         # Icons
-        self.tbNovel.setThemeIcon("cls_novel")
-        self.tbRefresh.setThemeIcon("refresh")
-        self.tbMore.setThemeIcon("menu")
+        self.tbNovel.setThemeIcon("cls_novel", "red")
+        self.tbRefresh.setThemeIcon("refresh", "green")
+        self.tbMore.setThemeIcon("more_vertical")
 
         qPalette = self.palette()
         qPalette.setBrush(QPalette.ColorRole.Window, qPalette.base())
@@ -452,7 +452,7 @@ class GuiNovelTree(QTreeWidget):
     def updateTheme(self) -> None:
         """Update theme elements."""
         iPx = SHARED.theme.baseIconHeight
-        self._pMore = SHARED.theme.loadDecoration("deco_doc_more", h=iPx)
+        self._pMore = SHARED.theme.getPixmap("more_arrow", (iPx, iPx))
         return
 
     ##

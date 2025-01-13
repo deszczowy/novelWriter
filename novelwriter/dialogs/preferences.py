@@ -26,16 +26,16 @@ from __future__ import annotations
 
 import logging
 
-from PyQt5.QtCore import Qt, pyqtSignal, pyqtSlot
-from PyQt5.QtGui import QCloseEvent, QKeyEvent, QKeySequence
-from PyQt5.QtWidgets import (
+from PyQt6.QtCore import Qt, pyqtSignal, pyqtSlot
+from PyQt6.QtGui import QCloseEvent, QKeyEvent, QKeySequence
+from PyQt6.QtWidgets import (
     QCompleter, QDialogButtonBox, QFileDialog, QHBoxLayout, QLineEdit,
     QPushButton, QVBoxLayout, QWidget
 )
 
 from novelwriter import CONFIG, SHARED
 from novelwriter.common import compact, describeFont, uniqueCompact
-from novelwriter.constants import nwUnicode
+from novelwriter.constants import nwLabels, nwUnicode, trConst
 from novelwriter.dialogs.quotes import GuiQuoteSelect
 from novelwriter.extensions.configlayout import NColourLabel, NScrollableForm
 from novelwriter.extensions.modified import (
@@ -173,7 +173,39 @@ class GuiPreferences(NDialog):
 
         self.mainForm.addRow(
             self.tr("Colour theme"), self.guiTheme,
-            self.tr("General colour theme and icons."), stretch=(3, 2)
+            self.tr("User interface colour theme."), stretch=(3, 2)
+        )
+
+        # Icon Theme
+        self.iconTheme = NComboBox(self)
+        self.iconTheme.setMinimumWidth(minWidth)
+        for theme, name in SHARED.theme.iconCache.listThemes():
+            self.iconTheme.addItem(name, theme)
+        self.iconTheme.setCurrentData(CONFIG.iconTheme, "material_rounded_bold")
+
+        self.mainForm.addRow(
+            self.tr("Icon theme"), self.iconTheme,
+            self.tr("User interface icon theme."), stretch=(3, 2)
+        )
+
+        # Tree Icon Colours
+        self.iconColTree = NComboBox(self)
+        self.iconColTree.setMinimumWidth(minWidth)
+        for key, label in nwLabels.THEME_COLORS.items():
+            self.iconColTree.addItem(trConst(label), key)
+        self.iconColTree.setCurrentData(CONFIG.iconColTree, "theme")
+
+        self.mainForm.addRow(
+            self.tr("Project tree icon colours"), self.iconColTree,
+            self.tr("Override colours for project icons."), stretch=(3, 2)
+        )
+
+        # Keep Theme Colours on Documents
+        self.iconColDocs = NSwitch(self)
+        self.iconColDocs.setChecked(CONFIG.iconColDocs)
+        self.mainForm.addRow(
+            self.tr("Keep theme colours on documents"), self.iconColDocs,
+            self.tr("Only override icon colours for folders.")
         )
 
         # Application Font Family
@@ -584,7 +616,7 @@ class GuiPreferences(NDialog):
         self.narratorBreak.setText(CONFIG.narratorBreak)
         self.mainForm.addRow(
             self.tr("Narrator break symbol"), self.narratorBreak,
-            self.tr("Symbol to indicate a narrator break in dialogue")
+            self.tr("Symbol to indicate a narrator break in dialogue.")
         )
 
         self.narratorDialog = QLineEdit(self)
@@ -900,15 +932,24 @@ class GuiPreferences(NDialog):
         refreshTree  = False
 
         # Appearance
-        guiLocale = self.guiLocale.currentData()
-        guiTheme  = self.guiTheme.currentData()
+        guiLocale   = self.guiLocale.currentData()
+        guiTheme    = self.guiTheme.currentData()
+        iconTheme   = self.iconTheme.currentData()
+        iconColTree = self.iconColTree.currentData()
+        iconColDocs = self.iconColDocs.isChecked()
 
         updateTheme  |= CONFIG.guiTheme != guiTheme
+        updateTheme  |= CONFIG.iconTheme != iconTheme
+        updateTheme  |= CONFIG.iconColTree != iconColTree
+        updateTheme  |= CONFIG.iconColDocs != iconColDocs
         needsRestart |= CONFIG.guiLocale != guiLocale
         needsRestart |= CONFIG.guiFont != self._guiFont
 
         CONFIG.guiLocale   = guiLocale
         CONFIG.guiTheme    = guiTheme
+        CONFIG.iconTheme   = iconTheme
+        CONFIG.iconColTree = iconColTree
+        CONFIG.iconColDocs = iconColDocs
         CONFIG.hideVScroll = self.hideVScroll.isChecked()
         CONFIG.hideHScroll = self.hideHScroll.isChecked()
         CONFIG.nativeFont  = self.nativeFont.isChecked()

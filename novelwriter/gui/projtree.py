@@ -32,10 +32,10 @@ import logging
 
 from enum import Enum
 
-from PyQt5.QtCore import QModelIndex, QPoint, Qt, pyqtSignal, pyqtSlot
-from PyQt5.QtGui import QIcon, QMouseEvent, QPainter, QPalette
-from PyQt5.QtWidgets import (
-    QAbstractItemView, QAction, QFrame, QHBoxLayout, QLabel, QMenu, QShortcut,
+from PyQt6.QtCore import QModelIndex, QPoint, Qt, pyqtSignal, pyqtSlot
+from PyQt6.QtGui import QAction, QIcon, QMouseEvent, QPainter, QPalette, QShortcut
+from PyQt6.QtWidgets import (
+    QAbstractItemView, QFrame, QHBoxLayout, QLabel, QMenu,
     QStyleOptionViewItem, QTreeView, QVBoxLayout, QWidget
 )
 
@@ -364,17 +364,17 @@ class GuiProjectToolBar(QWidget):
         self.tbAdd.setStyleSheet(buttonStyle)
         self.tbMore.setStyleSheet(buttonStyle)
 
-        self.tbQuick.setThemeIcon("bookmark")
-        self.tbMoveU.setThemeIcon("up")
-        self.tbMoveD.setThemeIcon("down")
-        self.tbAdd.setThemeIcon("add")
-        self.tbMore.setThemeIcon("menu")
+        self.tbQuick.setThemeIcon("bookmarks", "blue")
+        self.tbMoveU.setThemeIcon("chevron_up", "blue")
+        self.tbMoveD.setThemeIcon("chevron_down", "blue")
+        self.tbAdd.setThemeIcon("add", "green")
+        self.tbMore.setThemeIcon("more_vertical")
 
-        self.aAddEmpty.setIcon(SHARED.theme.getIcon("proj_document"))
-        self.aAddChap.setIcon(SHARED.theme.getIcon("proj_chapter"))
-        self.aAddScene.setIcon(SHARED.theme.getIcon("proj_scene"))
-        self.aAddNote.setIcon(SHARED.theme.getIcon("proj_note"))
-        self.aAddFolder.setIcon(SHARED.theme.getIcon("proj_folder"))
+        self.aAddEmpty.setIcon(SHARED.theme.getIcon("prj_document", "file"))
+        self.aAddChap.setIcon(SHARED.theme.getIcon("prj_chapter", "chapter"))
+        self.aAddScene.setIcon(SHARED.theme.getIcon("prj_scene", "scene"))
+        self.aAddNote.setIcon(SHARED.theme.getIcon("prj_note", "note"))
+        self.aAddFolder.setIcon(SHARED.theme.getIcon("prj_folder", "folder"))
 
         self.buildTemplatesMenu()
         self.buildQuickLinksMenu()
@@ -395,7 +395,7 @@ class GuiProjectToolBar(QWidget):
         for tHandle, nwItem in SHARED.project.tree.iterRoots(None):
             action = self.mQuick.addAction(nwItem.itemName)
             action.setData(tHandle)
-            action.setIcon(SHARED.theme.getIcon(nwLabels.CLASS_ICON[nwItem.itemClass]))
+            action.setIcon(SHARED.theme.getIcon(nwLabels.CLASS_ICON[nwItem.itemClass], "root"))
             action.triggered.connect(
                 qtLambda(self.projView.setSelectedHandle, tHandle, doScroll=True)
             )
@@ -442,7 +442,7 @@ class GuiProjectToolBar(QWidget):
         """Build the rood folder menu."""
         def addClass(itemClass: nwItemClass) -> None:
             aNew = self.mAddRoot.addAction(trConst(nwLabels.CLASS_NAME[itemClass]))
-            aNew.setIcon(SHARED.theme.getIcon(nwLabels.CLASS_ICON[itemClass]))
+            aNew.setIcon(SHARED.theme.getIcon(nwLabels.CLASS_ICON[itemClass], "root"))
             aNew.triggered.connect(
                 qtLambda(self.projTree.newTreeItem, nwItemType.ROOT, itemClass)
             )
@@ -1030,7 +1030,9 @@ class GuiProjectTree(QTreeView):
     def _clearSelection(self) -> None:
         """Clear the currently selected items."""
         self.clearSelection()
-        self.selectionModel().clearCurrentIndex()
+        if model := self.selectionModel():
+            # Selection model can be None (#2173)
+            model.clearCurrentIndex()
         return
 
     def _selectedRows(self) -> list[QModelIndex]:

@@ -27,9 +27,9 @@ import logging
 
 from typing import TYPE_CHECKING
 
-from PyQt5.QtCore import QEvent, QPoint, QSize, pyqtSignal
-from PyQt5.QtGui import QPalette
-from PyQt5.QtWidgets import QMenu, QVBoxLayout, QWidget
+from PyQt6.QtCore import QEvent, QPoint, QSize, pyqtSignal
+from PyQt6.QtGui import QPalette
+from PyQt6.QtWidgets import QMenu, QVBoxLayout, QWidget
 
 from novelwriter import CONFIG, SHARED
 from novelwriter.common import qtLambda
@@ -140,13 +140,13 @@ class GuiSideBar(QWidget):
         self.tbStats.setStyleSheet(buttonStyle)
         self.tbSettings.setStyleSheet(buttonStyle)
 
-        self.tbProject.setThemeIcon("view_editor")
-        self.tbNovel.setThemeIcon("view_novel")
-        self.tbSearch.setThemeIcon("view_search")
-        self.tbOutline.setThemeIcon("view_outline")
-        self.tbBuild.setThemeIcon("view_build")
-        self.tbDetails.setThemeIcon("proj_details")
-        self.tbStats.setThemeIcon("proj_stats")
+        self.tbProject.setThemeIcon("sb_project")
+        self.tbNovel.setThemeIcon("sb_novel")
+        self.tbSearch.setThemeIcon("sb_search")
+        self.tbOutline.setThemeIcon("sb_outline")
+        self.tbBuild.setThemeIcon("sb_build")
+        self.tbDetails.setThemeIcon("list")
+        self.tbStats.setThemeIcon("stats")
         self.tbSettings.setThemeIcon("settings")
 
         return

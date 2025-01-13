@@ -26,8 +26,8 @@ from __future__ import annotations
 import logging
 import random
 
-from PyQt5.QtCore import pyqtSlot
-from PyQt5.QtWidgets import (
+from PyQt6.QtCore import pyqtSlot
+from PyQt6.QtWidgets import (
     QDialogButtonBox, QGridLayout, QHBoxLayout, QLabel, QSpinBox, QVBoxLayout,
     QWidget
 )
@@ -60,7 +60,7 @@ class GuiLipsum(NDialog):
 
         # Icon
         self.docIcon = QLabel(self)
-        self.docIcon.setPixmap(SHARED.theme.getPixmap("proj_document", (nPx, nPx)))
+        self.docIcon.setPixmap(SHARED.theme.getPixmap("text", (nPx, nPx), "blue"))
 
         self.leftBox = QVBoxLayout()
         self.leftBox.setSpacing(vSp)

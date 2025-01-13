@@ -28,9 +28,9 @@ import logging
 from pathlib import Path
 from zipfile import ZipFile
 
-from PyQt5.QtCore import pyqtSlot
-from PyQt5.QtGui import QCloseEvent, QTextCursor
-from PyQt5.QtWidgets import (
+from PyQt6.QtCore import pyqtSlot
+from PyQt6.QtGui import QCloseEvent, QTextCursor
+from PyQt6.QtWidgets import (
     QApplication, QDialogButtonBox, QFileDialog, QFrame, QHBoxLayout, QLabel,
     QLineEdit, QPlainTextEdit, QPushButton, QVBoxLayout, QWidget
 )
@@ -78,7 +78,7 @@ class GuiDictionaries(NNonBlockingDialog):
         self.huBrowse = NIconToolButton(self, iSz, "browse")
         self.huBrowse.clicked.connect(self._doBrowseHunspell)
         self.huImport = QPushButton(self.tr("Add Dictionary"), self)
-        self.huImport.setIcon(SHARED.theme.getIcon("add"))
+        self.huImport.setIcon(SHARED.theme.getIcon("add", "green"))
         self.huImport.clicked.connect(self._doImportHunspell)
 
         self.huPathBox = QHBoxLayout()

@@ -27,9 +27,9 @@ import logging
 
 from time import time
 
-from PyQt5.QtCore import Qt, pyqtSignal, pyqtSlot
-from PyQt5.QtGui import QCursor, QKeyEvent
-from PyQt5.QtWidgets import (
+from PyQt6.QtCore import Qt, pyqtSignal, pyqtSlot
+from PyQt6.QtGui import QCursor, QKeyEvent
+from PyQt6.QtWidgets import (
     QApplication, QFrame, QHBoxLayout, QLabel, QLineEdit, QToolBar,
     QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget
 )
@@ -105,7 +105,7 @@ class GuiProjectSearch(QWidget):
         self.searchText.setClearButtonEnabled(True)
 
         self.searchAction = self.searchText.addAction(
-            SHARED.theme.getIcon("search"), QLineEdit.ActionPosition.TrailingPosition
+            SHARED.theme.getIcon("search", "blue"), QLineEdit.ActionPosition.TrailingPosition
         )
         self.searchAction.triggered.connect(self._processSearch)
 
@@ -133,12 +133,8 @@ class GuiProjectSearch(QWidget):
         self.headerBox.setContentsMargins(0, 0, 0, 0)
         self.headerBox.setSpacing(0)
 
-        self.headerWidget = QWidget(self)
-        self.headerWidget.setLayout(self.headerBox)
-        self.headerWidget.setContentsMargins(0, 0, 0, 0)
-
         self.outerBox = QVBoxLayout()
-        self.outerBox.addWidget(self.headerWidget, 0)
+        self.outerBox.addLayout(self.headerBox, 0)
         self.outerBox.addWidget(self.searchText, 0)
         self.outerBox.addWidget(self.searchResult, 1)
         self.outerBox.setContentsMargins(0, 0, 0, 0)
@@ -164,16 +160,13 @@ class GuiProjectSearch(QWidget):
         colBase = cssCol(qPalette.base().color())
         colFocus = cssCol(qPalette.highlight().color())
 
-        self.headerWidget.setStyleSheet(f"QWidget {{background: {colBase};}}")
-        self.headerWidget.setAutoFillBackground(True)
-
         self.setStyleSheet(
             "QToolBar {padding: 0; background: none;} "
             f"QLineEdit {{border: {bPx}px solid {colBase}; padding: {mPx}px;}} "
             f"QLineEdit:focus {{border: {bPx}px solid {colFocus};}} "
         )
 
-        self.searchAction.setIcon(SHARED.theme.getIcon("search"))
+        self.searchAction.setIcon(SHARED.theme.getIcon("search", "blue"))
         self.toggleCase.setIcon(SHARED.theme.getIcon("search_case"))
         self.toggleWord.setIcon(SHARED.theme.getIcon("search_word"))
         self.toggleRegEx.setIcon(SHARED.theme.getIcon("search_regex"))

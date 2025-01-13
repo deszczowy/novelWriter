@@ -28,13 +28,13 @@ import logging
 from time import time
 from typing import TYPE_CHECKING
 
-from PyQt5.QtCore import Qt, QTimer, QUrl, pyqtSignal, pyqtSlot
-from PyQt5.QtGui import (
-    QCloseEvent, QColor, QCursor, QDesktopServices, QFont, QPalette,
-    QResizeEvent, QTextDocument
+from PyQt6.QtCore import Qt, QTimer, QUrl, pyqtSignal, pyqtSlot
+from PyQt6.QtGui import (
+    QCloseEvent, QColor, QCursor, QDesktopServices, QFont, QPageLayout,
+    QPalette, QResizeEvent, QTextDocument
 )
-from PyQt5.QtPrintSupport import QPrinter, QPrintPreviewDialog
-from PyQt5.QtWidgets import (
+from PyQt6.QtPrintSupport import QPrinter, QPrintPreviewDialog
+from PyQt6.QtWidgets import (
     QAbstractItemView, QApplication, QFormLayout, QGridLayout, QHBoxLayout,
     QLabel, QListWidget, QListWidgetItem, QPushButton, QSplitter,
     QStackedWidget, QTabWidget, QTextBrowser, QTreeWidget, QTreeWidgetItem,
@@ -42,7 +42,7 @@ from PyQt5.QtWidgets import (
 )
 
 from novelwriter import CONFIG, SHARED
-from novelwriter.common import fuzzyTime
+from novelwriter.common import fuzzyTime, qtLambda
 from novelwriter.constants import nwLabels, nwStats, trConst
 from novelwriter.core.buildsettings import BuildCollection, BuildSettings
 from novelwriter.core.docbuild import NWBuildDocument
@@ -108,22 +108,22 @@ class GuiManuscript(NToolDialog):
 
         buttonStyle = SHARED.theme.getStyleSheet(STYLES_MIN_TOOLBUTTON)
 
-        self.tbAdd = NIconToolButton(self, iSz, "add")
+        self.tbAdd = NIconToolButton(self, iSz, "add", "green")
         self.tbAdd.setToolTip(self.tr("Add New Build"))
         self.tbAdd.setStyleSheet(buttonStyle)
         self.tbAdd.clicked.connect(self._createNewBuild)
 
-        self.tbDel = NIconToolButton(self, iSz, "remove")
+        self.tbDel = NIconToolButton(self, iSz, "remove", "red")
         self.tbDel.setToolTip(self.tr("Delete Selected Build"))
         self.tbDel.setStyleSheet(buttonStyle)
         self.tbDel.clicked.connect(self._deleteSelectedBuild)
 
-        self.tbCopy = NIconToolButton(self, iSz, "copy")
+        self.tbCopy = NIconToolButton(self, iSz, "copy", "blue")
         self.tbCopy.setToolTip(self.tr("Duplicate Selected Build"))
         self.tbCopy.setStyleSheet(buttonStyle)
         self.tbCopy.clicked.connect(self._copySelectedBuild)
 
-        self.tbEdit = NIconToolButton(self, iSz, "edit")
+        self.tbEdit = NIconToolButton(self, iSz, "edit", "green")
         self.tbEdit.setToolTip(self.tr("Edit Selected Build"))
         self.tbEdit.setStyleSheet(buttonStyle)
         self.tbEdit.clicked.connect(self._editSelectedBuild)
@@ -185,7 +185,7 @@ class GuiManuscript(NToolDialog):
         self.btnBuild.clicked.connect(self._buildManuscript)
 
         self.btnClose = QPushButton(self.tr("Close"), self)
-        self.btnClose.clicked.connect(self.close)
+        self.btnClose.clicked.connect(qtLambda(self.close))
 
         self.processBox = QGridLayout()
         self.processBox.addWidget(self.btnPreview, 0, 0)
@@ -490,7 +490,7 @@ class GuiManuscript(NToolDialog):
         for key, name in self._builds.builds():
             bItem = QListWidgetItem()
             bItem.setText(name)
-            bItem.setIcon(SHARED.theme.getIcon("export"))
+            bItem.setIcon(SHARED.theme.getIcon("build_settings", "blue"))
             bItem.setData(self.D_KEY, key)
             self.buildList.addItem(bItem)
             self._buildMap[key] = bItem
@@ -585,8 +585,8 @@ class _DetailsWidget(QWidget):
 
         self.listView.clear()
 
-        on = SHARED.theme.getIcon("bullet-on")
-        off = SHARED.theme.getIcon("bullet-off")
+        on = SHARED.theme.getIcon("bullet-on", "blue")
+        off = SHARED.theme.getIcon("bullet-off", "blue")
 
         # Name
         item = QTreeWidgetItem()
@@ -884,7 +884,7 @@ class _PreviewWidget(QTextBrowser):
     def printPreview(self, printer: QPrinter) -> None:
         """Connect the print preview painter to the document viewer."""
         QApplication.setOverrideCursor(QCursor(Qt.CursorShape.WaitCursor))
-        printer.setOrientation(QPrinter.Orientation.Portrait)
+        printer.setPageOrientation(QPageLayout.Orientation.Portrait)
         self.document().print(printer)
         QApplication.restoreOverrideCursor()
         return
@@ -986,17 +986,17 @@ class _StatsWidget(QWidget):
     def updateStats(self, data: dict[str, int]) -> None:
         """Update the stats values from a Tokenizer stats dict."""
         # Minimal
-        self.minWordCount.setText("{0:n}".format(data.get(nwStats.WORDS_ALL, 0)))
-        self.minCharCount.setText("{0:n}".format(data.get(nwStats.CHARS_ALL, 0)))
+        self.minWordCount.setText("{0:n}".format(data.get(nwStats.WORDS, 0)))
+        self.minCharCount.setText("{0:n}".format(data.get(nwStats.CHARS, 0)))
 
         # Maximal
-        self.maxTotalWords.setText("{0:n}".format(data.get(nwStats.WORDS_ALL, 0)))
+        self.maxTotalWords.setText("{0:n}".format(data.get(nwStats.WORDS, 0)))
         self.maxHeadWords.setText("{0:n}".format(data.get(nwStats.WORDS_TITLE, 0)))
         self.maxTextWords.setText("{0:n}".format(data.get(nwStats.WORDS_TEXT, 0)))
         self.maxTitleCount.setText("{0:n}".format(data.get(nwStats.TITLES, 0)))
         self.maxParCount.setText("{0:n}".format(data.get(nwStats.PARAGRAPHS, 0)))
 
-        self.maxTotalChars.setText("{0:n}".format(data.get(nwStats.CHARS_ALL, 0)))
+        self.maxTotalChars.setText("{0:n}".format(data.get(nwStats.CHARS, 0)))
         self.maxHeaderChars.setText("{0:n}".format(data.get(nwStats.CHARS_TITLE, 0)))
         self.maxTextChars.setText("{0:n}".format(data.get(nwStats.CHARS_TEXT, 0)))
 
@@ -1037,7 +1037,7 @@ class _StatsWidget(QWidget):
         hPx = CONFIG.pxInt(12)
         vPx = CONFIG.pxInt(4)
 
-        trAllChars = trConst(nwLabels.STATS_NAME[nwStats.CHARS_ALL])
+        trAllChars = trConst(nwLabels.STATS_NAME[nwStats.CHARS])
         trTextChars = trConst(nwLabels.STATS_NAME[nwStats.CHARS_TEXT])
         trTitleChars = trConst(nwLabels.STATS_NAME[nwStats.CHARS_TITLE])
         trParagraphCount = trConst(nwLabels.STATS_NAME[nwStats.PARAGRAPHS])
@@ -1045,7 +1045,7 @@ class _StatsWidget(QWidget):
         trAllWordChars = trConst(nwLabels.STATS_NAME[nwStats.WCHARS_ALL])
         trTextWordChars = trConst(nwLabels.STATS_NAME[nwStats.WCHARS_TEXT])
         trTitleWordChars = trConst(nwLabels.STATS_NAME[nwStats.WCHARS_TITLE])
-        trAllWords = trConst(nwLabels.STATS_NAME[nwStats.WORDS_ALL])
+        trAllWords = trConst(nwLabels.STATS_NAME[nwStats.WORDS])
         trTextWords = trConst(nwLabels.STATS_NAME[nwStats.WORDS_TEXT])
         trTitleWords = trConst(nwLabels.STATS_NAME[nwStats.WORDS_TITLE])
 

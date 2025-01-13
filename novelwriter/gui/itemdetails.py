@@ -27,8 +27,8 @@ import logging
 
 from enum import Enum
 
-from PyQt5.QtCore import pyqtSlot
-from PyQt5.QtWidgets import QGridLayout, QLabel, QWidget
+from PyQt6.QtCore import pyqtSlot
+from PyQt6.QtWidgets import QGridLayout, QLabel, QWidget
 
 from novelwriter import CONFIG, SHARED
 from novelwriter.common import elide
@@ -65,8 +65,8 @@ class GuiItemDetails(QWidget):
         fntValue = self.font()
         fntValue.setPointSizeF(0.9*fPt)
 
-        trStats1 = trConst(nwLabels.STATS_NAME[nwStats.CHARS_ALL])
-        trStats2 = trConst(nwLabels.STATS_NAME[nwStats.WORDS_ALL])
+        trStats1 = trConst(nwLabels.STATS_NAME[nwStats.CHARS])
+        trStats2 = trConst(nwLabels.STATS_NAME[nwStats.WORDS])
         trStats3 = trConst(nwLabels.STATS_NAME[nwStats.PARAGRAPHS])
 
         # Label
@@ -237,11 +237,11 @@ class GuiItemDetails(QWidget):
 
         if nwItem.isFileType():
             if nwItem.isActive:
-                self.labelIcon.setPixmap(SHARED.theme.getPixmap("checked", (iPx, iPx)))
+                self.labelIcon.setPixmap(SHARED.theme.getPixmap("checked", (iPx, iPx), "green"))
             else:
-                self.labelIcon.setPixmap(SHARED.theme.getPixmap("unchecked", (iPx, iPx)))
+                self.labelIcon.setPixmap(SHARED.theme.getPixmap("unchecked", (iPx, iPx), "red"))
         else:
-            self.labelIcon.setPixmap(SHARED.theme.getPixmap("noncheckable", (iPx, iPx)))
+            self.labelIcon.setPixmap(SHARED.theme.getPixmap("noncheckable", (iPx, iPx), "faded"))
 
         self.labelData.setText(elide(nwItem.itemName, 100))
 
@@ -255,7 +255,7 @@ class GuiItemDetails(QWidget):
         # Class
         # =====
 
-        classIcon = SHARED.theme.getIcon(nwLabels.CLASS_ICON[nwItem.itemClass])
+        classIcon = SHARED.theme.getIcon(nwLabels.CLASS_ICON[nwItem.itemClass], "root")
         self.classIcon.setPixmap(classIcon.pixmap(iPx, iPx))
         self.classData.setText(trConst(nwLabels.CLASS_NAME[nwItem.itemClass]))
 

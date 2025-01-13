@@ -30,9 +30,9 @@ from __future__ import annotations
 from enum import Enum
 from typing import TYPE_CHECKING
 
-from PyQt5.QtCore import QSize, Qt, pyqtSignal, pyqtSlot
-from PyQt5.QtGui import QMouseEvent, QWheelEvent
-from PyQt5.QtWidgets import (
+from PyQt6.QtCore import QSize, Qt, pyqtSignal, pyqtSlot
+from PyQt6.QtGui import QMouseEvent, QWheelEvent
+from PyQt6.QtWidgets import (
     QApplication, QComboBox, QDialog, QDoubleSpinBox, QLabel, QSpinBox,
     QToolButton, QWidget
 )
@@ -164,18 +164,21 @@ class NDoubleSpinBox(QDoubleSpinBox):
 
 class NIconToolButton(QToolButton):
 
-    def __init__(self, parent: QWidget, iconSize: QSize, icon: str | None = None) -> None:
+    def __init__(
+        self, parent: QWidget, iconSize: QSize,
+        icon: str | None = None, color: str | None = None
+    ) -> None:
         super().__init__(parent=parent)
         self.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
         self.setIconSize(iconSize)
         self.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         if icon:
-            self.setThemeIcon(icon)
+            self.setThemeIcon(icon, color)
         return
 
-    def setThemeIcon(self, iconKey: str) -> None:
+    def setThemeIcon(self, iconKey: str, color: str | None = None) -> None:
         """Set an icon from the current theme."""
-        self.setIcon(SHARED.theme.getIcon(iconKey))
+        self.setIcon(SHARED.theme.getIcon(iconKey, color))
         return
 
 

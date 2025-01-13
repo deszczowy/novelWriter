@@ -28,8 +28,8 @@ import logging
 
 from typing import TYPE_CHECKING
 
-from PyQt5.QtCore import QAbstractItemModel, QMimeData, QModelIndex, Qt
-from PyQt5.QtGui import QFont, QIcon
+from PyQt6.QtCore import QAbstractItemModel, QMimeData, QModelIndex, Qt
+from PyQt6.QtGui import QFont, QIcon
 
 from novelwriter.common import decodeMimeHandles, encodeMimeHandles, minmax
 from novelwriter.constants import nwConst
@@ -60,9 +60,7 @@ NODE_FLAGS = Qt.ItemFlag.ItemIsEnabled
 NODE_FLAGS |= Qt.ItemFlag.ItemIsSelectable
 NODE_FLAGS |= Qt.ItemFlag.ItemIsDropEnabled
 
-if TYPE_CHECKING:  # pragma: no cover
-    # Requires Python 3.10
-    T_NodeData = str | QIcon | QFont | Qt.AlignmentFlag | None
+T_NodeData = str | QIcon | QFont | Qt.AlignmentFlag | None
 
 
 class ProjectNode:
