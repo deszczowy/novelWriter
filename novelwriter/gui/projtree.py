@@ -1240,7 +1240,7 @@ class _TreeContextMenu(QMenu):
         # if self._item.itemClass == nwItemClass.TRASH or isRoot or (isFolder and not hasChild):
         action = self.addAction(self.tr("Custom PDF Print"))
         action.triggered.connect(
-            lambda: self.projTree.customPrintTreeItem(self._handle)
+            qtLambda(self._tree.customPrintTreeItem, self._handle)
         )
         return
 

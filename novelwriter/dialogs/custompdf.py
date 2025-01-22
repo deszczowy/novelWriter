@@ -31,12 +31,12 @@ import glob
 
 from fpdf import FPDF
 
-from PyQt5.QtCore import Qt, QPoint
-from PyQt5.QtGui import (
+from PyQt6.QtCore import Qt, QPoint
+from PyQt6.QtGui import (
     QPainter, QPixmap, QPen, QPaintEvent, QResizeEvent, QColor,
     QBrush, QPolygon
 )
-from PyQt5.QtWidgets import (
+from PyQt6.QtWidgets import (
     QDialogButtonBox, QHBoxLayout, QLabel, QVBoxLayout, QWidget, QSpinBox,
     QButtonGroup, QRadioButton, QComboBox
 )
@@ -131,10 +131,13 @@ class GuiCustomPDF(NDialog):
 
         self.outerBox = QVBoxLayout()
         self.innerBox = QHBoxLayout()
+        print("got layouts")
 
         # settings and preview
         self.innerBox.addLayout(self._buildOptions())
+        print("got options")
         self.innerBox.addLayout(self._buildPreview())
+        print("got preview")
 
         # buttons
         self.btnBox = QDialogButtonBox(QtDialogOk | QtDialogClose, self)
@@ -146,9 +149,11 @@ class GuiCustomPDF(NDialog):
         self.outerBox.addLayout(self.innerBox)
         self.outerBox.addLayout(self._buildDocumentPath())
         self.outerBox.addWidget(self.btnBox)
+        print("got designed")
 
         # main view settings
         self.setLayout(self.outerBox)
+        print("got layouted")
         self.setSizeGripEnabled(True)
 
         # self.setStyleSheet(f"QWidget {{border: 1px solid red;}} ")
@@ -179,15 +184,19 @@ class GuiCustomPDF(NDialog):
 
     def _buildOptions(self) -> QVBoxLayout:
         layout = QVBoxLayout()
+        print("got 1")
 
-        percentLabel = QLabel("Page fill percent")
+        percentLabel = QLabel(self.tr("Page fill percent"), self)
+        print("got 2")
         percentField = QSpinBox(self)
+        print("got 3")
         percentField.setValue(self.settings.RatioPercent)
         percentField.setMinimum(40)
         percentField.setMaximum(85)
         percentField.valueChanged.connect(self._percentFieldChange)
+        print("got spinbox")
 
-        orientationLabel = QLabel("Document orientation")
+        orientationLabel = QLabel(self.tr("Document orientation"), self)
         orientationGroup = QButtonGroup(self)
         orientationPortrait = QRadioButton("Portrait")
         orientationLandscape = QRadioButton("Landscape")
@@ -197,34 +206,34 @@ class GuiCustomPDF(NDialog):
         orientationLandscape.setChecked(self.settings.IsPortrait is False)
         orientationGroup.idClicked.connect(self._orientationChanged)
 
-        fontTypeLabel = QLabel("Font type")
+        fontTypeLabel = QLabel(self.tr("Font type"), self)
         self.fontTypeCombo = QComboBox(self)
         self.fontTypeCombo.currentIndexChanged.connect(
             self._fontTypeChange
         )
         self._fillComboBox(self.fontTypeCombo, self.settings.values["ft"])
 
-        fontSizeLabel = QLabel("Font size")
+        fontSizeLabel = QLabel(self.tr("Font size"), self)
         self.fontSizeCombo = QComboBox(self)
         self.fontSizeCombo.currentIndexChanged.connect(
             self._fontSizeChange
         )
         self._fillComboBox(self.fontSizeCombo, self.settings.values["fs"])
 
-        lineSpacingLabel = QLabel("Line spacing")
+        lineSpacingLabel = QLabel(self.tr("Line spacing"), self)
         self.lineSpacingCombo = QComboBox(self)
         self.lineSpacingCombo.currentIndexChanged.connect(
             self._lineSpacingChange
         )
         self._fillComboBox(self.lineSpacingCombo, self.settings.values["ls"])
 
-        paragraphSpacingLabel = QLabel("Paragraph spacing")
+        paragraphSpacingLabel = QLabel(self.tr("Paragraph spacing"), self)
         self.paragraphSpacingCombo = QComboBox(self)
         self.paragraphSpacingCombo.currentIndexChanged.connect(
             self._paragraphSpacingChange
         )
         self._fillComboBox(self.paragraphSpacingCombo, self.settings.values["ps"])
-
+        print("got components")
         layout.addWidget(percentLabel)
         layout.addWidget(percentField)
         layout.addWidget(orientationLabel)
@@ -239,6 +248,7 @@ class GuiCustomPDF(NDialog):
         layout.addWidget(paragraphSpacingLabel)
         layout.addWidget(self.paragraphSpacingCombo)
         layout.addStretch()
+        print("got lyouted")
 
         return layout
 
@@ -320,7 +330,7 @@ class CustomPDFCLientPreview(QWidget):
 
     def _setPixmap(self) -> None:
         self.pixmap = QPixmap(self.size())
-        self.pixmap.fill(Qt.white)
+        self.pixmap.fill(Qt.GlobalColor.white)
         self.calculate()
         self.repaint()
 
@@ -375,22 +385,22 @@ class CustomPDFCLientPreview(QWidget):
     def repaint(self) -> None:
 
         brush = QBrush()
-        brush.setColor(Qt.white)
-        brush.setStyle(Qt.SolidPattern)
+        brush.setColor(Qt.GlobalColor.white)
+        brush.setStyle(Qt.BrushStyle.SolidPattern)
 
         self.painter.begin(self.pixmap)
         self.painter.setBrush(brush)
 
-        self.painter.setPen(self.getPen(Qt.darkGray))
+        self.painter.setPen(self.getPen(Qt.GlobalColor.darkGray))
         self.painter.drawPolygon(self.page)
 
-        self.painter.setPen(self.getPen(Qt.gray))
+        self.painter.setPen(self.getPen(Qt.GlobalColor.gray))
         self.painter.drawPolygon(self.client)
 
-        self.painter.setPen(self.getPen(Qt.white))
+        self.painter.setPen(self.getPen(Qt.GlobalColor.white))
         self.painter.drawPolygon(self.cut)
 
-        self.painter.setPen(self.getPen(Qt.darkGray))
+        self.painter.setPen(self.getPen(Qt.GlobalColor.darkGray))
         self.painter.drawPolygon(self.fold)
 
         self.painter.end()
