@@ -131,13 +131,10 @@ class GuiCustomPDF(NDialog):
 
         self.outerBox = QVBoxLayout()
         self.innerBox = QHBoxLayout()
-        print("got layouts")
 
         # settings and preview
         self.innerBox.addLayout(self._buildOptions())
-        print("got options")
         self.innerBox.addLayout(self._buildPreview())
-        print("got preview")
 
         # buttons
         self.btnBox = QDialogButtonBox(QtDialogOk | QtDialogClose, self)
@@ -149,11 +146,9 @@ class GuiCustomPDF(NDialog):
         self.outerBox.addLayout(self.innerBox)
         self.outerBox.addLayout(self._buildDocumentPath())
         self.outerBox.addWidget(self.btnBox)
-        print("got designed")
 
         # main view settings
         self.setLayout(self.outerBox)
-        print("got layouted")
         self.setSizeGripEnabled(True)
 
         # self.setStyleSheet(f"QWidget {{border: 1px solid red;}} ")
@@ -184,17 +179,15 @@ class GuiCustomPDF(NDialog):
 
     def _buildOptions(self) -> QVBoxLayout:
         layout = QVBoxLayout()
-        print("got 1")
 
         percentLabel = QLabel(self.tr("Page fill percent"), self)
-        print("got 2")
+
         percentField = QSpinBox(self)
-        print("got 3")
+
         percentField.setValue(self.settings.RatioPercent)
         percentField.setMinimum(40)
         percentField.setMaximum(85)
         percentField.valueChanged.connect(self._percentFieldChange)
-        print("got spinbox")
 
         orientationLabel = QLabel(self.tr("Document orientation"), self)
         orientationGroup = QButtonGroup(self)
@@ -233,7 +226,6 @@ class GuiCustomPDF(NDialog):
             self._paragraphSpacingChange
         )
         self._fillComboBox(self.paragraphSpacingCombo, self.settings.values["ps"])
-        print("got components")
         layout.addWidget(percentLabel)
         layout.addWidget(percentField)
         layout.addWidget(orientationLabel)
@@ -248,7 +240,6 @@ class GuiCustomPDF(NDialog):
         layout.addWidget(paragraphSpacingLabel)
         layout.addWidget(self.paragraphSpacingCombo)
         layout.addStretch()
-        print("got lyouted")
 
         return layout
 
@@ -437,20 +428,43 @@ class CustomPDFCLientPreview(QWidget):
         self._setPixmap()
 
 #######
+class LocalFont:
+    def __init__(self, fname, fstyle, fileName):
+        self.family = fname
+        self.style = fstyle
+        self.path = fileName
 
+class FontCollection:
+    def __init__(self):
+        path = CONFIG.assetPath("fonts")
+        self.collection = {
+            "M": {
+                "N": LocalFont("typewriter", "", path / "CourierNormal.ttf"),
+                "B": LocalFont("typewriter", "b", path / "CourierBold.ttf"),
+                "I": LocalFont("typewriter", "i", path / "CourierItalic.ttf")
+            },
+            "D": {
+                "N": LocalFont("notable", "", path / "NotoNormal.ttf"),
+                "B": LocalFont("notable", "b", path / "NotoBold.ttf"),
+                "I": LocalFont("notable", "i", path / "NotoItalic.ttf")
+            },
+            "S": {
+                "N": LocalFont("lato", "", path / "LatoNormal.ttf"),
+                "B": LocalFont("lato", "b", path / "LatoBold.ttf"),
+                "I": LocalFont("lato", "i", path / "LatoItalic.ttf")
+            },
+        }
+    
+    def font(self, ftype, style) -> LocalFont:
+        return self.collection[ftype][style]
+
+#######
 class PDFCreator(FPDF):
 
     def __init__(self, text: str, settings: CustomPDFOptions) -> None:
         super().__init__()
 
-        nn = CONFIG.assetPath("fonts") / "NotoNormal.ttf"
-        nb = CONFIG.assetPath("fonts") / "NotoBold.ttf"
-        ni = CONFIG.assetPath("fonts") / "NotoItalic.ttf"
-
-        self.add_font("notable-font", style="", fname=nn)
-        self.add_font("notable-font", style="b", fname=nb)
-        self.add_font("notable-font", style="i", fname=ni)
-
+        self._storeFonts()
         self.done = False
         self._setDefaults()
         self._calculate(settings)
@@ -458,6 +472,13 @@ class PDFCreator(FPDF):
         self._startup()
         self._printout()
         self._save(settings.FileName)
+    
+    def _storeFonts(self):
+        self.localFonts = FontCollection()
+        for mainKey, family in self.localFonts.collection.items():
+            for styleKey, font in family.items():
+                self.add_font(font.family, style=font.style, fname=font.path)
+
 
     def _setDefaults(self) -> None:
         self.margin = 10  # mm
@@ -482,6 +503,7 @@ class PDFCreator(FPDF):
 
         self.lineHeight = self.mainFontSize * settings.LineSpacing
         self.paragraphSpacing = settings.ParagraphSpacing
+        self.fontType = settings.FontType
 
     def _startup(self) -> None:
         self.set_title("")
@@ -495,6 +517,10 @@ class PDFCreator(FPDF):
             format="A4",
             same=False
         )
+
+    def _set_local_font(self, style, size):
+        font = self.localFonts.font(self.fontType, style)
+        self.set_font(font.family, font.style, size)
     
     def _extractName(self, name: str) -> str:
         i = 0
@@ -557,7 +583,7 @@ class PDFCreator(FPDF):
 
         self.set_title(label)
 
-        self.set_font("notable-font", "B", self.headerFontSize)
+        self._set_local_font("B", self.headerFontSize)
         self.multi_cell(
             self.columnWidth,
             self.lineHeight,
@@ -571,7 +597,7 @@ class PDFCreator(FPDF):
 
     def _printChapterBody(self, text: str) -> None:
         paragraphs = text.splitlines()
-        self.set_font("notable-font", "", size=self.mainFontSize)
+        self._set_local_font("N", self.mainFontSize)
         for p in paragraphs:
             self.multi_cell(self.columnWidth, self.lineHeight, p)
             self.ln(self.paragraphSpacing)
@@ -585,10 +611,10 @@ class PDFCreator(FPDF):
 
     # override
     def header(self) -> None:
-        self.set_font("notable-font", "B", 9)
+        self._set_local_font("B", 9)
         width = self.get_string_width(self.title) + 11
         self.set_line_width(0.1)
-        self.set_font("notable-font", "I", 8)
+        self._set_local_font("I", 8)
         self.set_text_color(128)
         self.set_draw_color(128)
 
@@ -607,7 +633,7 @@ class PDFCreator(FPDF):
     # override
     def footer(self) -> None:
         self.set_y(-15)  # mm
-        self.set_font("notable-font", "I", 8)
+        self._set_local_font("I", 8)
         self.set_text_color(128)
         self.cell(self.columnWidth, 10, f"Page {self.page_no()}", align="L")
 
