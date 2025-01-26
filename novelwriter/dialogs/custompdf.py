@@ -48,10 +48,6 @@ from novelwriter.types import QtDialogClose, QtDialogOk
 
 logger = logging.getLogger(__name__)
 
-# rodzaj fontu szeryf, bezszeryf, mono
-# czy otworzyc, czy zapisac do pliku
-
-
 class CustomPDFOptions:
 
     def __init__(self) -> None:
@@ -600,7 +596,8 @@ class PDFCreator(FPDF):
         self._set_local_font("N", self.mainFontSize)
         for p in paragraphs:
             self.multi_cell(self.columnWidth, self.lineHeight, p)
-            self.ln(self.paragraphSpacing)
+            step = self.font_size * self.paragraphSpacing
+            self.ln(step)
 
     def _printChapter(self, title: str, text: str, isRegular: bool) -> None:
         if len(text) > 0:
