@@ -59,7 +59,7 @@ class Config:
 
     __slots__ = (
         "_confPath", "_dataPath", "_homePath", "_backPath", "_appPath", "_appRoot", "_hasError",
-        "_errData", "_nwLangPath", "_qtLangPath", "_qLocale", "_dLocale", "_dShortDate",
+        "_errData", "_nwLangPath", "_qtLangPath", "_qLocale", "_dLocale", "_dShortDate", "_tempPath",
         "_dShortDateTime", "_qtTrans", "_recentProjects", "_recentPaths", "_backupPath",
 
         "appName", "appHandle", "pdfDocs", "guiLocale", "guiTheme", "guiSyntax", "guiFont",

@@ -42,7 +42,7 @@ from PyQt6.QtWidgets import (
 )
 
 from novelwriter import CONFIG
-from novelwriter.extensions.configlayout import NColourLabel
+from novelwriter.extensions.configlayout import NColorLabel
 from novelwriter.extensions.modified import NDialog
 from novelwriter.types import QtDialogClose, QtDialogOk
 
@@ -116,9 +116,9 @@ class GuiCustomPDF(NDialog):
         self.setObjectName("GuiCustomPDF")
 
         self.setWindowTitle(self.tr("Custom PDF export"))
-        self.resize(CONFIG.pxInt(700), CONFIG.pxInt(300))
+        self.resize(700, 300)
 
-        self.lblDialogTitle = NColourLabel(
+        self.lblDialogTitle = NColorLabel(
             self.tr("Export document to PDF"),
             scale=1.6,
             bold=True,
