@@ -30,7 +30,7 @@ import logging
 from pathlib import Path
 
 from PyQt6.QtCore import Qt, pyqtSignal, pyqtSlot
-from PyQt6.QtGui import QCloseEvent, QColor
+from PyQt6.QtGui import QAction, QCloseEvent, QColor
 from PyQt6.QtWidgets import (
     QAbstractItemView, QApplication, QColorDialog, QDialogButtonBox,
     QFileDialog, QGridLayout, QHBoxLayout, QLineEdit, QMenu, QStackedWidget,
@@ -42,7 +42,7 @@ from novelwriter.common import formatFileFilter, qtLambda, simplified
 from novelwriter.constants import nwLabels, trConst
 from novelwriter.core.status import NWStatus, StatusEntry
 from novelwriter.enum import nwStatusShape
-from novelwriter.extensions.configlayout import NColourLabel, NFixedPage, NScrollableForm
+from novelwriter.extensions.configlayout import NColorLabel, NFixedPage, NScrollableForm
 from novelwriter.extensions.modified import NComboBox, NDialog, NIconToolButton
 from novelwriter.extensions.pagedsidebar import NPagedSideBar
 from novelwriter.extensions.switch import NSwitch
@@ -71,16 +71,16 @@ class GuiProjectSettings(NDialog):
         self.setWindowTitle(self.tr("Project Settings"))
 
         options = SHARED.project.options
-        self.setMinimumSize(CONFIG.pxInt(500), CONFIG.pxInt(400))
+        self.setMinimumSize(500, 400)
         self.resize(
-            CONFIG.pxInt(options.getInt("GuiProjectSettings", "winWidth", CONFIG.pxInt(650))),
-            CONFIG.pxInt(options.getInt("GuiProjectSettings", "winHeight", CONFIG.pxInt(500)))
+            options.getInt("GuiProjectSettings", "winWidth", 650),
+            options.getInt("GuiProjectSettings", "winHeight", 500),
         )
 
         # Title
-        self.titleLabel = NColourLabel(
+        self.titleLabel = NColorLabel(
             self.tr("Project Settings"), self, color=SHARED.theme.helpText,
-            scale=NColourLabel.HEADER_SCALE, indent=CONFIG.pxInt(4)
+            scale=NColorLabel.HEADER_SCALE, indent=4,
         )
 
         # SideBar
@@ -125,7 +125,7 @@ class GuiProjectSettings(NDialog):
         self.outerBox.addLayout(self.topBox)
         self.outerBox.addLayout(self.mainBox)
         self.outerBox.addWidget(self.buttonBox)
-        self.outerBox.setSpacing(CONFIG.pxInt(8))
+        self.outerBox.setSpacing(8)
 
         self.setLayout(self.outerBox)
         self.setSizeGripEnabled(True)
@@ -210,16 +210,14 @@ class GuiProjectSettings(NDialog):
 
     def _saveSettings(self) -> None:
         """Save GUI settings."""
-        winWidth    = CONFIG.rpxInt(self.width())
-        winHeight   = CONFIG.rpxInt(self.height())
-        statusColW  = CONFIG.rpxInt(self.statusPage.columnWidth())
-        importColW  = CONFIG.rpxInt(self.importPage.columnWidth())
-        replaceColW = CONFIG.rpxInt(self.replacePage.columnWidth())
+        statusColW  = self.statusPage.columnWidth()
+        importColW  = self.importPage.columnWidth()
+        replaceColW = self.replacePage.columnWidth()
 
         logger.debug("Saving State: GuiProjectSettings")
         options = SHARED.project.options
-        options.setValue("GuiProjectSettings", "winWidth", winWidth)
-        options.setValue("GuiProjectSettings", "winHeight", winHeight)
+        options.setValue("GuiProjectSettings", "winWidth", self.width())
+        options.setValue("GuiProjectSettings", "winHeight", self.height())
         options.setValue("GuiProjectSettings", "statusColW", statusColW)
         options.setValue("GuiProjectSettings", "importColW", importColW)
         options.setValue("GuiProjectSettings", "replaceColW", replaceColW)
@@ -232,7 +230,6 @@ class _SettingsPage(NScrollableForm):
     def __init__(self, parent: QWidget) -> None:
         super().__init__(parent=parent)
 
-        xW = CONFIG.pxInt(200)
         data = SHARED.project.data
         self.setHelpTextStyle(SHARED.theme.helpText)
         self.setRowIndent(0)
@@ -240,7 +237,7 @@ class _SettingsPage(NScrollableForm):
         # Project Name
         self.projName = QLineEdit(self)
         self.projName.setMaxLength(200)
-        self.projName.setMinimumWidth(xW)
+        self.projName.setMinimumWidth(200)
         self.projName.setText(data.name)
         self.addRow(
             self.tr("Project name"), self.projName,
@@ -251,7 +248,7 @@ class _SettingsPage(NScrollableForm):
         # Project Author
         self.projAuthor = QLineEdit(self)
         self.projAuthor.setMaxLength(200)
-        self.projAuthor.setMinimumWidth(xW)
+        self.projAuthor.setMinimumWidth(200)
         self.projAuthor.setText(data.author)
         self.addRow(
             self.tr("Author(s)"), self.projAuthor,
@@ -262,7 +259,7 @@ class _SettingsPage(NScrollableForm):
         # Project Language
         projLang = data.language or CONFIG.guiLocale
         self.projLang = NComboBox(self)
-        self.projLang.setMinimumWidth(xW)
+        self.projLang.setMinimumWidth(200)
         for tag, language in CONFIG.listLanguages(CONFIG.LANG_PROJ):
             self.projLang.addItem(language, tag)
         self.projLang.setCurrentData(projLang, projLang)
@@ -274,7 +271,7 @@ class _SettingsPage(NScrollableForm):
 
         # Spell Check Language
         self.spellLang = NComboBox(self)
-        self.spellLang.setMinimumWidth(xW)
+        self.spellLang.setMinimumWidth(200)
         self.spellLang.addItem(self.tr("Default"), "None")
         if CONFIG.hasEnchant:
             for tag, language in SHARED.spelling.listDictionaries():
@@ -323,9 +320,7 @@ class _StatusPage(NFixedPage):
             pageLabel = self.tr("Project Note Importance Levels")
             colSetting = "importColW"
 
-        wCol0 = CONFIG.pxInt(
-            SHARED.project.options.getInt("GuiProjectSettings", colSetting, 130)
-        )
+        wCol0 = SHARED.project.options.getInt("GuiProjectSettings", colSetting, 130)
 
         self._changed = False
         self._color = QColor(100, 100, 100)
@@ -334,7 +329,6 @@ class _StatusPage(NFixedPage):
 
         self._iPx = SHARED.theme.baseIconHeight
         iSz = SHARED.theme.baseIconSize
-        bPd = CONFIG.pxInt(4)
 
         iColor = self.palette().text().color()
 
@@ -345,9 +339,9 @@ class _StatusPage(NFixedPage):
         self.trSelColor  = self.tr("Select Colour")
 
         # Title
-        self.pageTitle = NColourLabel(
+        self.pageTitle = NColorLabel(
             pageLabel, self, color=SHARED.theme.helpText,
-            scale=NColourLabel.HEADER_SCALE
+            scale=NColorLabel.HEADER_SCALE
         )
 
         # List Box
@@ -395,7 +389,7 @@ class _StatusPage(NFixedPage):
         self.labelText.textEdited.connect(self._onNameEdit)
 
         buttonStyle = (
-            f"QToolButton {{padding: 0 {bPd}px;}} "
+            "QToolButton {padding: 0 4px;} "
             "QToolButton::menu-indicator {image: none;}"
         )
 
@@ -404,14 +398,16 @@ class _StatusPage(NFixedPage):
         self.colorButton.setSizePolicy(QtSizeMinimum, QtSizeMinimumExpanding)
         self.colorButton.setStyleSheet(buttonStyle)
         self.colorButton.setEnabled(False)
-        self.colorButton.clicked.connect(self._onColourSelect)
+        self.colorButton.clicked.connect(self._onColorSelect)
 
-        def buildMenu(menu: QMenu, items: dict[nwStatusShape, str]) -> None:
-            for shape, label in items.items():
-                icon = NWStatus.createIcon(self._iPx, iColor, shape)
-                action = menu.addAction(icon, trConst(label))
-                action.triggered.connect(qtLambda(self._selectShape, shape))
-                self._icons[shape] = icon
+        def buildMenu(menu: QMenu | None, items: dict[nwStatusShape, str]) -> None:
+            if menu is not None:
+                for shape, label in items.items():
+                    icon = NWStatus.createIcon(self._iPx, iColor, shape)
+                    action = QAction(icon, trConst(label))
+                    action.triggered.connect(qtLambda(self._selectShape, shape))
+                    menu.addAction(action)
+                    self._icons[shape] = icon
 
         self.shapeMenu = QMenu(self)
         buildMenu(self.shapeMenu, nwLabels.SHAPES_PLAIN)
@@ -498,7 +494,7 @@ class _StatusPage(NFixedPage):
         return
 
     @pyqtSlot()
-    def _onColourSelect(self) -> None:
+    def _onColorSelect(self) -> None:
         """Open a dialog to select the status icon colour."""
         if (color := QColorDialog.getColor(self._color, self, self.trSelColor)).isValid():
             self._color = color
@@ -676,15 +672,12 @@ class _ReplacePage(NFixedPage):
         self._changed = False
 
         iSz = SHARED.theme.baseIconSize
-
-        wCol0 = CONFIG.pxInt(
-            SHARED.project.options.getInt("GuiProjectSettings", "replaceColW", 130)
-        )
+        wCol0 = SHARED.project.options.getInt("GuiProjectSettings", "replaceColW", 130)
 
         # Title
-        self.pageTitle = NColourLabel(
+        self.pageTitle = NColorLabel(
             self.tr("Text Auto-Replace for Preview and Build"), self,
-            color=SHARED.theme.helpText, scale=NColourLabel.HEADER_SCALE
+            color=SHARED.theme.helpText, scale=NColorLabel.HEADER_SCALE
         )
 
         # List Box

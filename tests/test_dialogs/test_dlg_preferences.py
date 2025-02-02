@@ -27,6 +27,7 @@ from PyQt6.QtGui import QAction, QFont, QFontDatabase, QKeyEvent
 from PyQt6.QtWidgets import QFileDialog, QFontDialog
 
 from novelwriter import CONFIG, SHARED
+from novelwriter.config import DEF_GUI
 from novelwriter.constants import nwUnicode
 from novelwriter.dialogs.preferences import GuiPreferences
 from novelwriter.dialogs.quotes import GuiQuoteSelect
@@ -56,7 +57,7 @@ def testDlgPreferences_Main(qtbot, monkeypatch, nwGUI, tstPaths):
     # Check GUI Themes
     themes = [prefs.guiTheme.itemData(i) for i in range(prefs.guiTheme.count())]
     assert len(themes) >= 5
-    assert "default" in themes
+    assert DEF_GUI in themes
 
     # Check GUI Syntax
     syntax = [prefs.guiSyntax.itemData(i) for i in range(prefs.guiSyntax.count())]
@@ -72,17 +73,16 @@ def testDlgPreferences_Main(qtbot, monkeypatch, nwGUI, tstPaths):
     prefs.close()
 
     # Check Fallback Values
-    with monkeypatch.context() as mp:
-        mp.setattr(CONFIG, "hasEnchant", False)
-        prefs = GuiPreferences(nwGUI)
-        prefs.show()
+    CONFIG.hasEnchant = False
+    prefs = GuiPreferences(nwGUI)
+    prefs.show()
 
-        # Check Spell Checking
-        spelling = [prefs.spellLanguage.itemData(i) for i in range(prefs.spellLanguage.count())]
-        assert len(spelling) == 1
-        assert spelling == [""]
+    # Check Spell Checking
+    spelling = [prefs.spellLanguage.itemData(i) for i in range(prefs.spellLanguage.count())]
+    assert len(spelling) == 1
+    assert spelling == [""]
 
-        prefs.close()
+    prefs.close()
 
     # qtbot.stop()
 
@@ -97,6 +97,7 @@ def testDlgPreferences_Actions(qtbot, monkeypatch, nwGUI):
 
     # Check Navigation
     vBar = prefs.mainForm.verticalScrollBar()
+    assert vBar is not None
     old = -1
     with qtbot.waitSignal(vBar.valueChanged) as value:
         prefs.sidebar.button(1).click()
@@ -120,12 +121,16 @@ def testDlgPreferences_Actions(qtbot, monkeypatch, nwGUI):
     # Check Save Button
     prefs.show()
     with qtbot.waitSignal(prefs.newPreferencesReady) as signal:
-        prefs.buttonBox.button(QtDialogSave).click()
+        button = prefs.buttonBox.button(QtDialogSave)
+        assert button is not None
+        button.click()
         assert signal.args == [False, False, False, False]
 
     # Check Close Button
     prefs.show()
-    prefs.buttonBox.button(QtDialogCancel).click()
+    button = prefs.buttonBox.button(QtDialogCancel)
+    assert button is not None
+    button.click()
     assert prefs.isHidden() is True
 
     # Close Using Escape Key
@@ -138,13 +143,14 @@ def testDlgPreferences_Actions(qtbot, monkeypatch, nwGUI):
 
 
 @pytest.mark.gui
-def testDlgPreferences_Settings(qtbot, monkeypatch, nwGUI, tstPaths):
+def testDlgPreferences_Settings(qtbot, monkeypatch, nwGUI, fncPath, tstPaths):
     """Test the preferences dialog settings."""
     spelling = [("en", "English [en]"), ("de", "Deutch [de]")]
-    languages = [("en_GB", "British English"), ("en_US", "US English")]
-
     monkeypatch.setattr(SHARED._spelling, "listDictionaries", lambda: spelling)
-    monkeypatch.setattr(CONFIG, "listLanguages", lambda *a: languages)
+
+    (fncPath / "nw_en_US.qm").touch()
+    (fncPath / "project_en_US.json").touch()
+    CONFIG._nwLangPath = fncPath
 
     prefs = GuiPreferences(nwGUI)
     with qtbot.waitExposed(prefs):
@@ -313,7 +319,9 @@ def testDlgPreferences_Settings(qtbot, monkeypatch, nwGUI, tstPaths):
     with monkeypatch.context() as mp:
         mp.setattr(QFontDatabase, "families", lambda *a: ["TestFont"])
         with qtbot.waitSignal(prefs.newPreferencesReady) as signal:
-            prefs.buttonBox.button(QtDialogSave).click()
+            button = prefs.buttonBox.button(QtDialogSave)
+            assert button is not None
+            button.click()
             assert signal.args == [True, True, True, True]
 
     # Check Settings

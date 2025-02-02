@@ -29,8 +29,6 @@ from enum import Flag, IntEnum
 
 from PyQt6.QtGui import QColor
 
-from novelwriter.types import nwDataClass
-
 ESCAPES = {r"\*": "*", r"\~": "~", r"\_": "_", r"\[": "[", r"\]": "]", r"\ ": ""}
 RX_ESC = re.compile("|".join([re.escape(k) for k in ESCAPES.keys()]), flags=re.DOTALL)
 
@@ -42,7 +40,6 @@ def stripEscape(text: str) -> str:
     return text
 
 
-@nwDataClass
 class TextDocumentTheme:
     """Default document theme."""
 
@@ -107,17 +104,18 @@ class BlockTyp(IntEnum):
 
     EMPTY   = 1   # Empty line (new paragraph)
     TITLE   = 2   # Title
-    HEAD1   = 3   # Heading 1
-    HEAD2   = 4   # Heading 2
-    HEAD3   = 5   # Heading 3
-    HEAD4   = 6   # Heading 4
-    TEXT    = 7   # Text line
-    SEP     = 8   # Scene separator
-    SKIP    = 9   # Paragraph break
-    SUMMARY = 10  # Synopsis/short comment
-    NOTE    = 11  # Note
-    COMMENT = 12  # Comment
-    KEYWORD = 13  # Tag/reference keywords
+    PART    = 3   # Partition
+    HEAD1   = 4   # Heading 1 or Chapter
+    HEAD2   = 5   # Heading 2 or Scene
+    HEAD3   = 6   # Heading 3 or Section
+    HEAD4   = 7   # Heading 4
+    TEXT    = 8   # Text line
+    SEP     = 9   # Scene separator
+    SKIP    = 10  # Paragraph break
+    SUMMARY = 11  # Synopsis/short comment
+    NOTE    = 12  # Note
+    COMMENT = 13  # Comment
+    KEYWORD = 14  # Tag/reference keywords
 
 
 class BlockFmt(Flag):

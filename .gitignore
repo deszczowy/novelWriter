@@ -1,6 +1,7 @@
 # Setup/Install
 /MANIFEST
 /build/
+/build_*/
 /deploy/
 /dist/
 /dist_*/
@@ -10,6 +11,7 @@ setup.iss
 /novelwriter.desktop
 /novelWriter.pyw
 /setup/macos/Info.plist
+/setup/windows/build
 .venv
 
 # Translations

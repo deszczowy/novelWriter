@@ -333,6 +333,7 @@ def testGuiEditor_MetaData(qtbot, nwGUI, projPath, mockRnd):
 def testGuiEditor_ContextMenu(monkeypatch, qtbot, nwGUI, projPath, mockRnd):
     """Test the editor context menu."""
     monkeypatch.setattr(QMenu, "exec", lambda *a: None)
+    monkeypatch.setattr(QMenu, "setParent", lambda *a: None)
 
     buildTestProject(nwGUI, projPath)
     assert nwGUI.openDocument(C.hSceneDoc) is True
@@ -441,6 +442,9 @@ def testGuiEditor_ContextMenu(monkeypatch, qtbot, nwGUI, projPath, mockRnd):
     ctxMenu.deleteLater()
 
     # Copy Text
+    clipboard = QApplication.clipboard()
+    assert clipboard is not None
+
     ctxMenu = getMenuForPos(docEditor, 31, True)
     assert ctxMenu is not None
     assert docEditor.textCursor().selectedText() == "text"
@@ -448,14 +452,14 @@ def testGuiEditor_ContextMenu(monkeypatch, qtbot, nwGUI, projPath, mockRnd):
     assert actions == [
         "Cut", "Copy", "Paste", "Select All", "Select Word", "Select Paragraph"
     ]
-    QApplication.clipboard().clear()
+    clipboard.clear()
     ctxMenu.actions()[1].trigger()
-    assert QApplication.clipboard().text(QClipboard.Mode.Clipboard) == "text"
+    assert clipboard.text(QClipboard.Mode.Clipboard) == "text"
 
     # Cut Text
-    QApplication.clipboard().clear()
+    clipboard.clear()
     ctxMenu.actions()[0].trigger()
-    assert QApplication.clipboard().text(QClipboard.Mode.Clipboard) == "text"
+    assert clipboard.text(QClipboard.Mode.Clipboard) == "text"
     assert "text" not in docEditor.getText()
 
     # Paste Text
@@ -472,6 +476,7 @@ def testGuiEditor_ContextMenu(monkeypatch, qtbot, nwGUI, projPath, mockRnd):
 def testGuiEditor_SpellChecking(qtbot, monkeypatch, nwGUI, projPath, ipsumText, mockRnd):
     """Test the document spell checker."""
     monkeypatch.setattr(QMenu, "exec", lambda *a: None)
+    monkeypatch.setattr(QMenu, "setParent", lambda *a: None)
 
     buildTestProject(nwGUI, projPath)
     assert nwGUI.openDocument(C.hSceneDoc) is True
@@ -572,7 +577,9 @@ def testGuiEditor_Actions(qtbot, nwGUI, projPath, ipsumText, mockRnd):
     # Select/Cut/Copy/Paste/Undo/Redo
     # ===============================
 
-    QApplication.clipboard().clear()
+    clipboard = QApplication.clipboard()
+    assert clipboard is not None
+    clipboard.clear()
 
     # Select All
     assert docEditor.docAction(nwDocAction.SEL_ALL) is True
@@ -624,7 +631,7 @@ def testGuiEditor_Actions(qtbot, nwGUI, projPath, ipsumText, mockRnd):
     assert newPara[5] == ipsumText[4]
     assert newPara[6] == ipsumText[2]
 
-    QApplication.clipboard().clear()
+    clipboard.clear()
 
     # Emphasis/Undo/Redo
     # ==================

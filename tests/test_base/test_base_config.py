@@ -84,12 +84,6 @@ def testBaseConfig_Constructor(monkeypatch):
         assert tstConf.osWindows is False
         assert tstConf.osUnknown is True
 
-    # App is single file
-    with monkeypatch.context() as mp:
-        mp.setattr("pathlib.Path.is_file", lambda *a: True)
-        tstConf = Config()
-        assert tstConf._appPath == tstConf._appRoot
-
 
 @pytest.mark.base
 def testBaseConfig_InitLoadSave(monkeypatch, fncPath, tstPaths):
@@ -254,52 +248,29 @@ def testBaseConfig_SettersGetters(fncPath):
 
     tstConf.setMainWinSize(70, 70)
     assert tstConf.mainWinSize == [70, 70]
-    assert tstConf._mainWinSize == [70, 70]
+    assert tstConf.mainWinSize == [70, 70]
 
     tstConf.setMainWinSize(1200, 650)
 
     # Welcome Window Size
     tstConf.setWelcomeWinSize(70, 70)
     assert tstConf.welcomeWinSize == [70, 70]
-    assert tstConf._welcomeSize == [70, 70]
+    assert tstConf.welcomeWinSize == [70, 70]
 
     tstConf.setWelcomeWinSize(800, 500)
 
     # Preferences Size
     tstConf.setPreferencesWinSize(70, 70)
-    assert tstConf.preferencesWinSize == [70, 70]
-    assert tstConf._prefsWinSize == [70, 70]
+    assert tstConf.prefsWinSize == [70, 70]
+    assert tstConf.prefsWinSize == [70, 70]
 
     tstConf.setPreferencesWinSize(700, 615)
-
-    # Main Pane Splitter
-    tstConf.setMainPanePos([200, 700])
-    assert tstConf.mainPanePos == [200, 700]
-    assert tstConf._mainPanePos == [200, 700]
-
-    tstConf.setMainPanePos([300, 800])
-
-    # View Pane Splitter
-    tstConf.setViewPanePos([400, 250])
-    assert tstConf.viewPanePos == [400, 250]
-    assert tstConf._viewPanePos == [400, 250]
-
-    tstConf.setViewPanePos([500, 150])
-
-    # Outline Pane Splitter
-    tstConf.setOutlinePanePos([400, 250])
-    assert tstConf.outlinePanePos == [400, 250]
-    assert tstConf._outlnPanePos == [400, 250]
-
-    tstConf.setOutlinePanePos([500, 150])
 
     # Getters Only
     # ============
 
     assert tstConf.getTextWidth(False) == 700
     assert tstConf.getTextWidth(True) == 800
-    assert tstConf.getTextMargin() == 40
-    assert tstConf.getTabWidth() == 40
 
 
 @pytest.mark.base

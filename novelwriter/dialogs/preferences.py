@@ -27,7 +27,7 @@ from __future__ import annotations
 import logging
 
 from PyQt6.QtCore import Qt, pyqtSignal, pyqtSlot
-from PyQt6.QtGui import QCloseEvent, QKeyEvent, QKeySequence
+from PyQt6.QtGui import QAction, QCloseEvent, QKeyEvent, QKeySequence
 from PyQt6.QtWidgets import (
     QCompleter, QDialogButtonBox, QFileDialog, QHBoxLayout, QLineEdit,
     QPushButton, QVBoxLayout, QWidget
@@ -35,9 +35,10 @@ from PyQt6.QtWidgets import (
 
 from novelwriter import CONFIG, SHARED
 from novelwriter.common import compact, describeFont, uniqueCompact
+from novelwriter.config import DEF_GUI, DEF_ICONS, DEF_SYNTAX, DEF_TREECOL
 from novelwriter.constants import nwLabels, nwUnicode, trConst
 from novelwriter.dialogs.quotes import GuiQuoteSelect
-from novelwriter.extensions.configlayout import NColourLabel, NScrollableForm
+from novelwriter.extensions.configlayout import NColorLabel, NScrollableForm
 from novelwriter.extensions.modified import (
     NComboBox, NDialog, NDoubleSpinBox, NIconToolButton, NSpinBox
 )
@@ -58,23 +59,23 @@ class GuiPreferences(NDialog):
         logger.debug("Create: GuiPreferences")
         self.setObjectName("GuiPreferences")
         self.setWindowTitle(self.tr("Preferences"))
-        self.setMinimumSize(CONFIG.pxInt(600), CONFIG.pxInt(500))
-        self.resize(*CONFIG.preferencesWinSize)
+        self.setMinimumSize(600, 500)
+        self.resize(*CONFIG.prefsWinSize)
 
         # Title
-        self.titleLabel = NColourLabel(
+        self.titleLabel = NColorLabel(
             self.tr("Preferences"), self, color=SHARED.theme.helpText,
-            scale=NColourLabel.HEADER_SCALE, indent=CONFIG.pxInt(4)
+            scale=NColorLabel.HEADER_SCALE, indent=4,
         )
 
         # Search Box
+        self.searchAction = QAction(SHARED.theme.getIcon("search"), "")
+        self.searchAction.triggered.connect(self._gotoSearch)
+
         self.searchText = QLineEdit(self)
         self.searchText.setPlaceholderText(self.tr("Search"))
-        self.searchText.setMinimumWidth(CONFIG.pxInt(200))
-        self.searchAction = self.searchText.addAction(
-            SHARED.theme.getIcon("search"), QLineEdit.ActionPosition.TrailingPosition
-        )
-        self.searchAction.triggered.connect(self._gotoSearch)
+        self.searchText.setMinimumWidth(200)
+        self.searchText.addAction(self.searchAction, QLineEdit.ActionPosition.TrailingPosition)
 
         # SideBar
         self.sidebar = NPagedSideBar(self)
@@ -105,7 +106,7 @@ class GuiPreferences(NDialog):
         self.outerBox.addLayout(self.searchBox)
         self.outerBox.addLayout(self.mainBox)
         self.outerBox.addWidget(self.buttonBox)
-        self.outerBox.setSpacing(CONFIG.pxInt(8))
+        self.outerBox.setSpacing(8)
 
         self.setLayout(self.outerBox)
         self.setSizeGripEnabled(True)
@@ -134,8 +135,6 @@ class GuiPreferences(NDialog):
         section = 0
         iSz = SHARED.theme.baseIconSize
         boxFixed = 6*SHARED.theme.textNWidth
-        minWidth = CONFIG.pxInt(200)
-        fontWidth = CONFIG.pxInt(162)
 
         # Temporary Variables
         self._guiFont = CONFIG.guiFont
@@ -154,7 +153,7 @@ class GuiPreferences(NDialog):
 
         # Display Language
         self.guiLocale = NComboBox(self)
-        self.guiLocale.setMinimumWidth(minWidth)
+        self.guiLocale.setMinimumWidth(200)
         for lang, name in CONFIG.listLanguages(CONFIG.LANG_NW):
             self.guiLocale.addItem(name, lang)
         self.guiLocale.setCurrentData(CONFIG.guiLocale, "en_GB")
@@ -166,10 +165,10 @@ class GuiPreferences(NDialog):
 
         # Colour Theme
         self.guiTheme = NComboBox(self)
-        self.guiTheme.setMinimumWidth(minWidth)
+        self.guiTheme.setMinimumWidth(200)
         for theme, name in SHARED.theme.listThemes():
             self.guiTheme.addItem(name, theme)
-        self.guiTheme.setCurrentData(CONFIG.guiTheme, "default")
+        self.guiTheme.setCurrentData(CONFIG.guiTheme, DEF_GUI)
 
         self.mainForm.addRow(
             self.tr("Colour theme"), self.guiTheme,
@@ -178,10 +177,10 @@ class GuiPreferences(NDialog):
 
         # Icon Theme
         self.iconTheme = NComboBox(self)
-        self.iconTheme.setMinimumWidth(minWidth)
+        self.iconTheme.setMinimumWidth(200)
         for theme, name in SHARED.theme.iconCache.listThemes():
             self.iconTheme.addItem(name, theme)
-        self.iconTheme.setCurrentData(CONFIG.iconTheme, "material_rounded_bold")
+        self.iconTheme.setCurrentData(CONFIG.iconTheme, DEF_ICONS)
 
         self.mainForm.addRow(
             self.tr("Icon theme"), self.iconTheme,
@@ -190,10 +189,10 @@ class GuiPreferences(NDialog):
 
         # Tree Icon Colours
         self.iconColTree = NComboBox(self)
-        self.iconColTree.setMinimumWidth(minWidth)
+        self.iconColTree.setMinimumWidth(200)
         for key, label in nwLabels.THEME_COLORS.items():
             self.iconColTree.addItem(trConst(label), key)
-        self.iconColTree.setCurrentData(CONFIG.iconColTree, "theme")
+        self.iconColTree.setCurrentData(CONFIG.iconColTree, DEF_TREECOL)
 
         self.mainForm.addRow(
             self.tr("Project tree icon colours"), self.iconColTree,
@@ -211,7 +210,7 @@ class GuiPreferences(NDialog):
         # Application Font Family
         self.guiFont = QLineEdit(self)
         self.guiFont.setReadOnly(True)
-        self.guiFont.setMinimumWidth(fontWidth)
+        self.guiFont.setMinimumWidth(162)
         self.guiFont.setText(describeFont(self._guiFont))
         self.guiFont.setCursorPosition(0)
         self.guiFontButton = NIconToolButton(self, iSz, "font")
@@ -256,10 +255,10 @@ class GuiPreferences(NDialog):
 
         # Document Colour Theme
         self.guiSyntax = NComboBox(self)
-        self.guiSyntax.setMinimumWidth(CONFIG.pxInt(200))
+        self.guiSyntax.setMinimumWidth(200)
         for syntax, name in SHARED.theme.listSyntax():
             self.guiSyntax.addItem(name, syntax)
-        self.guiSyntax.setCurrentData(CONFIG.guiSyntax, "default_light")
+        self.guiSyntax.setCurrentData(CONFIG.guiSyntax, DEF_SYNTAX)
 
         self.mainForm.addRow(
             self.tr("Document colour theme"), self.guiSyntax,
@@ -269,7 +268,7 @@ class GuiPreferences(NDialog):
         # Document Font Family
         self.textFont = QLineEdit(self)
         self.textFont.setReadOnly(True)
-        self.textFont.setMinimumWidth(fontWidth)
+        self.textFont.setMinimumWidth(162)
         self.textFont.setText(describeFont(CONFIG.textFont))
         self.textFont.setCursorPosition(0)
         self.textFontButton = NIconToolButton(self, iSz, "font")
@@ -482,7 +481,7 @@ class GuiPreferences(NDialog):
 
         # Spell Checking
         self.spellLanguage = NComboBox(self)
-        self.spellLanguage.setMinimumWidth(minWidth)
+        self.spellLanguage.setMinimumWidth(200)
 
         if CONFIG.hasEnchant:
             for tag, language in SHARED.spelling.listDictionaries():
@@ -651,8 +650,6 @@ class GuiPreferences(NDialog):
         self.sidebar.addButton(title, section)
         self.mainForm.addGroupLabel(title, section)
 
-        boxWidth = CONFIG.pxInt(150)
-
         # Auto-Replace as You Type Main Switch
         self.doReplace = NSwitch(self)
         self.doReplace.setChecked(CONFIG.doReplace)
@@ -701,7 +698,7 @@ class GuiPreferences(NDialog):
         # Pad Before
         self.fmtPadBefore = QLineEdit(self)
         self.fmtPadBefore.setMaxLength(32)
-        self.fmtPadBefore.setMinimumWidth(boxWidth)
+        self.fmtPadBefore.setMinimumWidth(150)
         self.fmtPadBefore.setText(CONFIG.fmtPadBefore)
         self.mainForm.addRow(
             self.tr("Insert non-breaking space before"), self.fmtPadBefore,
@@ -711,7 +708,7 @@ class GuiPreferences(NDialog):
         # Pad After
         self.fmtPadAfter = QLineEdit(self)
         self.fmtPadAfter.setMaxLength(32)
-        self.fmtPadAfter.setMinimumWidth(boxWidth)
+        self.fmtPadAfter.setMinimumWidth(150)
         self.fmtPadAfter.setText(CONFIG.fmtPadAfter)
         self.mainForm.addRow(
             self.tr("Insert non-breaking space after"), self.fmtPadAfter,

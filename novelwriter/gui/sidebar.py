@@ -28,10 +28,9 @@ import logging
 from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import QEvent, QPoint, QSize, pyqtSignal
-from PyQt6.QtGui import QPalette
 from PyQt6.QtWidgets import QMenu, QVBoxLayout, QWidget
 
-from novelwriter import CONFIG, SHARED
+from novelwriter import SHARED
 from novelwriter.common import qtLambda
 from novelwriter.enum import nwView
 from novelwriter.extensions.eventfilters import StatusTipFilter
@@ -114,7 +113,7 @@ class GuiSideBar(QWidget):
         self.outerBox.addWidget(self.tbStats)
         self.outerBox.addWidget(self.tbSettings)
         self.outerBox.setContentsMargins(0, 0, 0, 0)
-        self.outerBox.setSpacing(CONFIG.pxInt(6))
+        self.outerBox.setSpacing(6)
 
         self.setLayout(self.outerBox)
         self.updateTheme()
@@ -125,10 +124,6 @@ class GuiSideBar(QWidget):
 
     def updateTheme(self) -> None:
         """Initialise GUI elements that depend on specific settings."""
-        qPalette = self.palette()
-        qPalette.setBrush(QPalette.ColorRole.Window, qPalette.base())
-        self.setPalette(qPalette)
-
         buttonStyle = SHARED.theme.getStyleSheet(STYLES_BIG_TOOLBUTTON)
 
         self.tbProject.setStyleSheet(buttonStyle)
@@ -145,8 +140,8 @@ class GuiSideBar(QWidget):
         self.tbSearch.setThemeIcon("sb_search")
         self.tbOutline.setThemeIcon("sb_outline")
         self.tbBuild.setThemeIcon("sb_build")
-        self.tbDetails.setThemeIcon("list")
-        self.tbStats.setThemeIcon("stats")
+        self.tbDetails.setThemeIcon("sb_details")
+        self.tbStats.setThemeIcon("sb_stats")
         self.tbSettings.setThemeIcon("settings")
 
         return

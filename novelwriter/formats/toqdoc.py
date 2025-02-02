@@ -156,6 +156,7 @@ class ToQTextDocument(Tokenizer):
 
         self._mHead = {
             BlockTyp.TITLE: (fPx * self._marginTitle[0], fPx * self._marginTitle[1]),
+            BlockTyp.PART:  (fPx * self._marginTitle[0], fPx * self._marginTitle[1]),
             BlockTyp.HEAD1: (fPx * self._marginHead1[0], fPx * self._marginHead1[1]),
             BlockTyp.HEAD2: (fPx * self._marginHead2[0], fPx * self._marginHead2[1]),
             BlockTyp.HEAD3: (fPx * self._marginHead3[0], fPx * self._marginHead3[1]),
@@ -165,6 +166,7 @@ class ToQTextDocument(Tokenizer):
         hScale = self._scaleHeads
         self._sHead = {
             BlockTyp.TITLE: (nwStyles.H_SIZES.get(0, 1.0) * fPt) if hScale else fPt,
+            BlockTyp.PART:  (nwStyles.H_SIZES.get(0, 1.0) * fPt) if hScale else fPt,
             BlockTyp.HEAD1: (nwStyles.H_SIZES.get(1, 1.0) * fPt) if hScale else fPt,
             BlockTyp.HEAD2: (nwStyles.H_SIZES.get(2, 1.0) * fPt) if hScale else fPt,
             BlockTyp.HEAD3: (nwStyles.H_SIZES.get(3, 1.0) * fPt) if hScale else fPt,
@@ -278,8 +280,10 @@ class ToQTextDocument(Tokenizer):
         printer.setPageMargins(self._pageMargins, QPageLayout.Unit.Millimeter)
         printer.setOutputFileName(str(path))
 
-        self._document.documentLayout().setPaintDevice(printer)
-        self._document.setPageSize(printer.pageRect(QPrinter.Unit.Millimeter).size())
+        if layout := self._document.documentLayout():
+            layout.setPaintDevice(printer)
+
+        self._document.setPageSize(printer.pageRect(QPrinter.Unit.DevicePixel).size())
         self._document.print(printer)
 
         return
@@ -458,7 +462,8 @@ class ToQTextDocument(Tokenizer):
             cursor.insertFrame(fFmt)
             cursor.setBlockFormat(bFmt)
             cursor.insertText(self._project.localLookup("New Page"), cFmt)
-            cursor.swap(self._document.rootFrame().lastCursorPosition())
+            if root := self._document.rootFrame():
+                cursor.swap(root.lastCursorPosition())
 
         return
 

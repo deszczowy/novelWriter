@@ -31,11 +31,11 @@ from PyQt6.QtWidgets import (
 )
 
 from novelwriter import CONFIG, SHARED
-from novelwriter.common import cssCol, readTextFile
-from novelwriter.extensions.configlayout import NColourLabel
+from novelwriter.common import readTextFile
+from novelwriter.extensions.configlayout import NColorLabel
 from novelwriter.extensions.modified import NDialog
 from novelwriter.extensions.versioninfo import VersionInfoWidget
-from novelwriter.types import QtAlignRightTop, QtDialogClose
+from novelwriter.types import QtAlignRightTop, QtDialogClose, QtHexArgb
 
 logger = logging.getLogger(__name__)
 
@@ -49,18 +49,13 @@ class GuiAbout(NDialog):
         self.setObjectName("GuiAbout")
 
         self.setWindowTitle(self.tr("About novelWriter"))
-        self.resize(CONFIG.pxInt(700), CONFIG.pxInt(500))
-
-        hA = CONFIG.pxInt(8)
-        hB = CONFIG.pxInt(16)
-        nwH = CONFIG.pxInt(36)
-        nwPx = CONFIG.pxInt(128)
+        self.resize(700, 500)
 
         # Logo and Banner
-        self.nwImage = SHARED.theme.loadDecoration("nw-text", h=nwH)
+        self.nwImage = SHARED.theme.getDecoration("nw-text", h=36)
 
         self.nwLogo = QLabel(self)
-        self.nwLogo.setPixmap(SHARED.theme.getPixmap("novelwriter", (nwPx, nwPx)))
+        self.nwLogo.setPixmap(SHARED.theme.getPixmap("novelwriter", (128, 128)))
 
         self.nwLabel = QLabel(self)
         self.nwLabel.setPixmap(self.nwImage)
@@ -73,14 +68,13 @@ class GuiAbout(NDialog):
         self.nwLicence.setOpenExternalLinks(True)
 
         # Credits
-        self.lblCredits = NColourLabel(
+        self.lblCredits = NColorLabel(
             self.tr("Credits"), self, scale=1.6, bold=True
         )
 
         self.txtCredits = QTextBrowser(self)
         self.txtCredits.setOpenExternalLinks(True)
-        self.txtCredits.document().setDocumentMargin(0)
-        self.txtCredits.setViewportMargins(0, hA, hA, 0)
+        self.txtCredits.setViewportMargins(0, 8, 8, 0)
 
         # Buttons
         self.btnBox = QDialogButtonBox(QtDialogClose, self)
@@ -88,15 +82,15 @@ class GuiAbout(NDialog):
 
         # Assemble
         self.innerBox = QVBoxLayout()
-        self.innerBox.addSpacing(hB)
+        self.innerBox.addSpacing(16)
         self.innerBox.addWidget(self.nwLabel)
         self.innerBox.addWidget(self.nwInfo)
-        self.innerBox.addSpacing(hA)
+        self.innerBox.addSpacing(8)
         self.innerBox.addWidget(self.nwLicence)
-        self.innerBox.addSpacing(hA)
+        self.innerBox.addSpacing(8)
         self.innerBox.addWidget(self.lblCredits)
         self.innerBox.addWidget(self.txtCredits)
-        self.innerBox.addSpacing(hB)
+        self.innerBox.addSpacing(16)
         self.innerBox.addWidget(self.btnBox)
 
         self.outerBox = QHBoxLayout()
@@ -141,7 +135,7 @@ class GuiAbout(NDialog):
 
     def _setStyleSheet(self) -> None:
         """Set stylesheet text document."""
-        baseCol = cssCol(self.palette().window().color())
+        baseCol = self.palette().window().color().name(QtHexArgb)
         self.txtCredits.setStyleSheet(
             f"QTextBrowser {{border: none; background: {baseCol};}} "
         )

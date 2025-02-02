@@ -32,8 +32,8 @@ from PyQt6.QtWidgets import (
     QListWidget, QListWidgetItem, QVBoxLayout, QWidget
 )
 
-from novelwriter import CONFIG, SHARED
-from novelwriter.extensions.configlayout import NColourLabel
+from novelwriter import SHARED
+from novelwriter.extensions.configlayout import NColorLabel
 from novelwriter.extensions.modified import NDialog
 from novelwriter.extensions.switch import NSwitch
 from novelwriter.types import QtAccepted, QtDialogCancel, QtDialogOk, QtUserRole
@@ -60,16 +60,13 @@ class GuiDocSplit(NDialog):
 
         self.headLabel = QLabel(self.tr("Document Headings"), self)
         self.headLabel.setFont(SHARED.theme.guiFontB)
-        self.helpLabel = NColourLabel(
+        self.helpLabel = NColorLabel(
             self.tr("Select the maximum level to split into files."),
             self, color=SHARED.theme.helpText, wrap=True
         )
 
         # Values
         iPx = SHARED.theme.baseIconHeight
-        hSp = CONFIG.pxInt(12)
-        vSp = CONFIG.pxInt(8)
-        bSp = CONFIG.pxInt(12)
 
         pOptions = SHARED.project.options
         spLevel = pOptions.getInt("GuiDocSplit", "spLevel", 3)
@@ -79,11 +76,11 @@ class GuiDocSplit(NDialog):
         # Heading Selection
         self.listBox = QListWidget(self)
         self.listBox.setDragDropMode(QAbstractItemView.DragDropMode.NoDragDrop)
-        self.listBox.setMinimumWidth(CONFIG.pxInt(400))
-        self.listBox.setMinimumHeight(CONFIG.pxInt(180))
+        self.listBox.setMinimumWidth(400)
+        self.listBox.setMinimumHeight(180)
 
         self.splitLevel = QComboBox(self)
-        self.splitLevel.addItem(self.tr("Split on Heading Level 1 (Partition)"),      1)
+        self.splitLevel.addItem(self.tr("Split on Heading Level 1 (Partition)"),  1)
         self.splitLevel.addItem(self.tr("Split up to Heading Level 2 (Chapter)"), 2)
         self.splitLevel.addItem(self.tr("Split up to Heading Level 3 (Scene)"),   3)
         self.splitLevel.addItem(self.tr("Split up to Heading Level 4 (Section)"), 4)
@@ -111,8 +108,8 @@ class GuiDocSplit(NDialog):
         self.optBox.addWidget(self.hierarchySwitch, 1, 1)
         self.optBox.addWidget(self.trashLabel,  2, 0)
         self.optBox.addWidget(self.trashSwitch, 2, 1)
-        self.optBox.setVerticalSpacing(vSp)
-        self.optBox.setHorizontalSpacing(hSp)
+        self.optBox.setVerticalSpacing(8)
+        self.optBox.setHorizontalSpacing(12)
         self.optBox.setColumnStretch(3, 1)
 
         # Buttons
@@ -125,12 +122,12 @@ class GuiDocSplit(NDialog):
         self.outerBox.setSpacing(0)
         self.outerBox.addWidget(self.headLabel)
         self.outerBox.addWidget(self.helpLabel)
-        self.outerBox.addSpacing(vSp)
+        self.outerBox.addSpacing(8)
         self.outerBox.addWidget(self.listBox)
         self.outerBox.addWidget(self.splitLevel)
-        self.outerBox.addSpacing(vSp)
+        self.outerBox.addSpacing(8)
         self.outerBox.addLayout(self.optBox)
-        self.outerBox.addSpacing(bSp)
+        self.outerBox.addSpacing(12)
         self.outerBox.addWidget(self.buttonBox)
         self.setLayout(self.outerBox)
 
