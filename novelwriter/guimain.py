@@ -247,8 +247,6 @@ class GuiMain(QMainWindow):
         self.docEditor.itemHandleChanged.connect(self.novelView.setActiveHandle)
         self.docEditor.itemHandleChanged.connect(self.projView.setActiveHandle)
         self.docEditor.loadDocumentTagRequest.connect(self._followTag)
-        self.docEditor.novelItemMetaChanged.connect(self.novelView.updateNovelItemMeta)
-        self.docEditor.novelStructureChanged.connect(self.novelView.refreshTree)
         self.docEditor.openDocumentRequest.connect(self._openDocument)
         self.docEditor.requestNewNoteCreation.connect(SHARED.createNewNote)
         self.docEditor.requestNextDocument.connect(self.openNextDocument)
@@ -312,11 +310,11 @@ class GuiMain(QMainWindow):
         self.asProjTimer.start()
         self.asDocTimer.start()
         self.mainStatus.clearStatus()
-        self.showNormal()
 
         logger.debug("Ready: GUI")
         logger.info("novelWriter is ready ...")
         self.mainStatus.setStatusMessage(self.tr("novelWriter is ready ..."))
+        CONFIG.splashMessage("novelWriter is ready ...")
 
         return
 
@@ -342,6 +340,15 @@ class GuiMain(QMainWindow):
             logger.info("Command line path: %s", cmdOpen)
             self.openProject(cmdOpen)
 
+        # Add a small delay for the window coordinates to be ready
+        # before showing any dialogs
+        QTimer.singleShot(50, self.showPostLaunchDialogs)
+
+        return
+
+    @pyqtSlot()
+    def showPostLaunchDialogs(self) -> None:
+        """Show post launch dialogs."""
         if not SHARED.hasProject:
             self.showWelcomeDialog()
 
@@ -372,7 +379,7 @@ class GuiMain(QMainWindow):
             return True
 
         if not isYes:
-            msgYes = SHARED.question("%s<br>%s" % (
+            msgYes = SHARED.question("{0}<br>{1}".format(
                 self.tr("Close the current project?"),
                 self.tr("Changes are saved automatically.")
             ))
@@ -532,7 +539,7 @@ class GuiMain(QMainWindow):
     ) -> bool:
         """Open a specific document, optionally at a given line."""
         if not (SHARED.hasProject and tHandle):
-            logger.error("Nothing to open open")
+            logger.error("Nothing to open")
             return False
 
         if sTitle and tLine is None:
@@ -735,7 +742,6 @@ class GuiMain(QMainWindow):
 
             SHARED.project.index.rebuild()
             SHARED.project.tree.refreshAllItems()
-            self.novelView.refreshTree()
 
             tEnd = time()
             self.mainStatus.setStatusMessage(
@@ -847,7 +853,7 @@ class GuiMain(QMainWindow):
 
     def closeMain(self) -> bool:
         """Save everything, and close novelWriter."""
-        if SHARED.hasProject and CONFIG.askBeforeExit and not SHARED.question("%s<br>%s" % (
+        if SHARED.hasProject and CONFIG.askBeforeExit and not SHARED.question("{0}<br>{1}".format(
             self.tr("Do you want to exit novelWriter?"),
             self.tr("Changes are saved automatically.")
         )):
@@ -1012,7 +1018,7 @@ class GuiMain(QMainWindow):
             fN = self.novelView.treeHasFocus()
 
             self._changeView(nwView.EDITOR)
-            if (vM and (vP and fP or vN and not fN)) or (not vM and vN):
+            if (vM and ((vP and fP) or (vN and not fN))) or (not vM and vN):
                 self._changeView(nwView.NOVEL)
                 self.novelView.setTreeFocus()
             else:
@@ -1042,8 +1048,10 @@ class GuiMain(QMainWindow):
         self.initMain()
         self.saveDocument()
 
-        if tree:
+        if tree and not theme:
+            # These are also updated by a theme refresh
             SHARED.project.tree.refreshAllItems()
+            self.novelView.refreshCurrentTree()
 
         if theme:
             SHARED.theme.loadTheme()
@@ -1069,6 +1077,7 @@ class GuiMain(QMainWindow):
         self.projView.initSettings()
         self.novelView.initSettings()
         self.outlineView.initSettings()
+        self.mainStatus.initSettings()
 
         # Force update of word count
         self._lastTotalCount = 0
@@ -1174,6 +1183,12 @@ class GuiMain(QMainWindow):
             )
         elif view == nwView.OUTLINE:
             self.mainStack.setCurrentWidget(self.outlineView)
+
+        # Set active status
+        isMain = self.mainStack.currentWidget() == self.splitMain
+        isNovel = self.projStack.currentWidget() == self.novelView
+        self.novelView.setActive(isMain and isNovel)
+
         return
 
     @pyqtSlot(nwDocAction)
@@ -1249,15 +1264,23 @@ class GuiMain(QMainWindow):
         if self._lastTotalCount != currentTotalCount:
             self._lastTotalCount = currentTotalCount
 
-            SHARED.project.updateWordCounts()
+            SHARED.project.updateCounts()
             if CONFIG.incNotesWCount:
-                iTotal = sum(SHARED.project.data.initCounts)
-                cTotal = sum(SHARED.project.data.currCounts)
-                self.mainStatus.setProjectStats(cTotal, cTotal - iTotal)
+                if CONFIG.useCharCount:
+                    iTotal = sum(SHARED.project.data.initCounts[2:])
+                    cTotal = sum(SHARED.project.data.currCounts[2:])
+                else:
+                    iTotal = sum(SHARED.project.data.initCounts[:2])
+                    cTotal = sum(SHARED.project.data.currCounts[:2])
             else:
-                iNovel, _ = SHARED.project.data.initCounts
-                cNovel, _ = SHARED.project.data.currCounts
-                self.mainStatus.setProjectStats(cNovel, cNovel - iNovel)
+                if CONFIG.useCharCount:
+                    iTotal = SHARED.project.data.initCounts[2]
+                    cTotal = SHARED.project.data.currCounts[2]
+                else:
+                    iTotal = SHARED.project.data.initCounts[0]
+                    cTotal = SHARED.project.data.currCounts[0]
+
+            self.mainStatus.setProjectStats(cTotal, cTotal - iTotal)
 
         return
 

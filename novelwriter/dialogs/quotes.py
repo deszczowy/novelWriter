@@ -78,7 +78,7 @@ class GuiQuoteSelect(NDialog):
 
         minSize = 100
         for sKey, sLabel in nwQuotes.SYMBOLS.items():
-            text = "[ %s ] %s" % (sKey, trConst(sLabel))
+            text = f"[ {sKey} ] {trConst(sLabel)}"
             minSize = max(minSize, metrics.boundingRect(text).width())
             qtItem = QListWidgetItem(text)
             qtItem.setData(self.D_KEY, sKey)
@@ -122,11 +122,11 @@ class GuiQuoteSelect(NDialog):
     @classmethod
     def getQuote(cls, parent: QWidget, current: str = "") -> tuple[str, bool]:
         """Pop the dialog and return the result."""
-        cls = GuiQuoteSelect(parent, current=current)
-        cls.exec()
-        quote = cls._selected
-        accepted = cls.result() == QtAccepted
-        cls.softDelete()
+        dialog = cls(parent, current=current)
+        dialog.exec()
+        quote = dialog._selected
+        accepted = dialog.result() == QtAccepted
+        dialog.softDelete()
         return quote, accepted
 
     ##

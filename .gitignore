@@ -57,3 +57,10 @@ ToC.txt
 # Other
 /test.py
 *.pdf
+.config
+.local
+*.patch
+
+# IDE
+.vscode
+.ruff_cache

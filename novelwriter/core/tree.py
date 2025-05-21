@@ -27,20 +27,21 @@ from __future__ import annotations
 import logging
 import random
 
-from collections.abc import Iterable, Iterator
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal, overload
 
 from PyQt6.QtCore import QModelIndex
 
 from novelwriter import SHARED
-from novelwriter.constants import nwFiles, nwLabels, trConst
+from novelwriter.constants import nwFiles, nwLabels, nwStyles, trConst
 from novelwriter.core.item import NWItem
 from novelwriter.core.itemmodel import ProjectModel, ProjectNode
 from novelwriter.enum import nwChange, nwItemClass, nwItemLayout, nwItemType
 from novelwriter.error import logException
 
-if TYPE_CHECKING:  # pragma: no cover
+if TYPE_CHECKING:
+    from collections.abc import Iterable, Iterator
+
     from novelwriter.core.project import NWProject
 
 logger = logging.getLogger(__name__)
@@ -60,7 +61,7 @@ class NWTree:
     also used for file names.
     """
 
-    __slots__ = ("_project", "_model", "_items", "_nodes", "_trash")
+    __slots__ = ("_items", "_model", "_nodes", "_project", "_ready", "_trash")
 
     def __init__(self, project: NWProject) -> None:
         self._project = project
@@ -68,6 +69,7 @@ class NWTree:
         self._items: dict[str, NWItem] = {}
         self._nodes: dict[str, ProjectNode] = {}
         self._trash = None
+        self._ready = False
         logger.debug("Ready: NWTree")
         return
 
@@ -105,6 +107,11 @@ class NWTree:
     ##
     #  Properties
     ##
+
+    @property
+    def project(self) -> NWProject:
+        """Return the parent project."""
+        return self._project
 
     @property
     def trash(self) -> ProjectNode | None:
@@ -249,10 +256,36 @@ class NWTree:
             logger.error("Not all items could be added to project tree")
 
         self._trash = self._getTrashNode()
+        self._ready = True
         self._model.endInsertRows()
         self._model.layoutChanged.emit()
 
         return
+
+    def pickParent(self, sNode: ProjectNode, hLevel: int, isNote: bool) -> tuple[str | None, int]:
+        """Pick an appropriate parent handle for adding a new item."""
+        if sNode.item.isFolderType() or sNode.item.isRootType():
+            # Always add as a direct child of folders
+            return sNode.item.itemHandle, sNode.childCount()
+
+        pNode = sNode.parent()
+        pLevel = nwStyles.H_LEVEL.get(pNode.item.mainHeading, 0) if pNode else 0
+
+        # Notes are treated as H0, and scenes and sections both as H3
+        sLevel = min(0 if isNote else nwStyles.H_LEVEL.get(sNode.item.mainHeading, 0), 3)
+
+        if pNode and pNode.item.isFileType() and pLevel >= hLevel and sLevel > hLevel:
+            # If the selected item is a smaller heading and the parent heading
+            # is equal or larger, we make it a sibling of the parent (See #2260)
+            return pNode.item.itemParent, pNode.row() + 1
+
+        if sNode.childCount() > 0 and (0 < sLevel < hLevel or isNote):
+            # If the selected item already has child nodes and has a larger
+            # heading or is a note, we make the new item a child
+            return sNode.item.itemHandle, sNode.childCount()
+
+        # The default behaviour is to make the new item a sibling
+        return sNode.item.itemParent, sNode.row() + 1
 
     def refreshItems(self, items: list[str]) -> None:
         """Refresh these items on the GUI. If they are an ordered range,
@@ -276,6 +309,12 @@ class NWTree:
         self._model.root.refresh()
         self._model.root.updateCount(propagate=False)
         self._model.layoutChanged.emit()
+        return
+
+    def novelStructureChanged(self, tHandle: str) -> None:
+        """Emit a novel structure change signal."""
+        if self._ready:
+            SHARED.novelStructureChanged.emit(tHandle)
         return
 
     def checkConsistency(self, prefix: str) -> tuple[int, int]:
@@ -371,16 +410,20 @@ class NWTree:
 
         return True
 
-    def sumWords(self) -> tuple[int, int]:
-        """Loop over all entries and add up the word counts."""
-        noteWords = 0
+    def sumCounts(self) -> tuple[int, int, int, int]:
+        """Loop over all entries and add up the word and char counts."""
         novelWords = 0
+        notesWords = 0
+        novelChars = 0
+        notesChars = 0
         for item in self._items.values():
             if item.itemLayout == nwItemLayout.NOTE:
-                noteWords += item.wordCount
+                notesWords += item.wordCount
+                notesChars += item.charCount
             elif item.itemLayout == nwItemLayout.DOCUMENT:
                 novelWords += item.wordCount
-        return novelWords, noteWords
+                novelChars += item.charCount
+        return novelWords, notesWords, novelChars, notesChars
 
     ##
     #  Tree Item Methods
@@ -388,7 +431,7 @@ class NWTree:
 
     def checkType(self, tHandle: str, itemType: nwItemType) -> bool:
         """Check if item exists and is of the specified item type."""
-        if tItem := self.__getitem__(tHandle):
+        if tItem := self[tHandle]:
             return tItem.itemType == itemType
         return False
 
@@ -406,8 +449,7 @@ class NWTree:
                     node = parent
                 else:
                     return path
-            else:
-                logger.error("Max project tree depth reached")
+            logger.error("Max project tree depth reached")
         return path
 
     def subTree(self, tHandle: str) -> list[str]:

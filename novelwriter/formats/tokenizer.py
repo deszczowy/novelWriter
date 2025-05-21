@@ -28,8 +28,7 @@ import logging
 import re
 
 from abc import ABC, abstractmethod
-from pathlib import Path
-from typing import NamedTuple
+from typing import TYPE_CHECKING, NamedTuple
 
 from PyQt6.QtCore import QLocale
 from PyQt6.QtGui import QColor, QFont
@@ -40,13 +39,17 @@ from novelwriter.constants import (
     nwHeadFmt, nwKeyWords, nwLabels, nwShortcode, nwStats, nwStyles, nwUnicode,
     trConst
 )
-from novelwriter.core.project import NWProject
 from novelwriter.enum import nwComment, nwItemLayout
 from novelwriter.formats.shared import (
     BlockFmt, BlockTyp, T_Block, T_Formats, T_Note, TextDocumentTheme, TextFmt
 )
 from novelwriter.text.comments import processComment
 from novelwriter.text.patterns import REGEX_PATTERNS, DialogParser
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from novelwriter.core.project import NWProject
 
 logger = logging.getLogger(__name__)
 
@@ -61,18 +64,18 @@ class ComStyle(NamedTuple):
 COMMENT_STYLE = {
     nwComment.PLAIN:    ComStyle("Comment", "comment", "comment"),
     nwComment.IGNORE:   ComStyle(),
-    nwComment.SYNOPSIS: ComStyle("Synopsis", "modifier", "synopsis"),
-    nwComment.SHORT:    ComStyle("Short Description", "modifier", "synopsis"),
+    nwComment.SYNOPSIS: ComStyle("Synopsis", "modifier", "note"),
+    nwComment.SHORT:    ComStyle("Short Description", "modifier", "note"),
     nwComment.NOTE:     ComStyle("Note", "modifier", "note"),
     nwComment.FOOTNOTE: ComStyle("", "modifier", "note"),
     nwComment.COMMENT:  ComStyle(),
-    nwComment.STORY:    ComStyle("", "modifier", "note"),
+    nwComment.STORY:    ComStyle("Story Structure", "modifier", "note"),
 }
 HEADINGS = [
     BlockTyp.TITLE, BlockTyp.PART, BlockTyp.HEAD1,
     BlockTyp.HEAD2, BlockTyp.HEAD3, BlockTyp.HEAD4,
 ]
-SKIP_INDENT = HEADINGS + [BlockTyp.SEP, BlockTyp.SKIP]
+SKIP_INDENT = [*HEADINGS, BlockTyp.SEP, BlockTyp.SKIP]
 B_EMPTY: T_Block = (BlockTyp.EMPTY, "", "", [], BlockFmt.NONE)
 
 
@@ -118,13 +121,15 @@ class Tokenizer(ABC):
         self._indentFirst  = False   # Indent first paragraph
         self._doJustify    = False   # Justify text
         self._doBodyText   = True    # Include body text
-        self._doSynopsis   = False   # Also process synopsis comments
-        self._doComments   = False   # Also process comments
+        self._doComments   = set()   # Comment styles to allow
         self._doKeywords   = False   # Also process keywords like tags and references
         self._keepBreaks   = True    # Keep line breaks in paragraphs
         self._defaultAlign = "left"  # The default text alignment
 
         self._skipKeywords: set[str] = set()  # Keywords to ignore
+
+        # Defaults
+        self._doComments.add(nwComment.FOOTNOTE)
 
         # Other Setting
         self._theme = TextDocumentTheme()
@@ -393,14 +398,12 @@ class Tokenizer(ABC):
         self._doBodyText = state
         return
 
-    def setSynopsis(self, state: bool) -> None:
-        """Include synopsis comments in build."""
-        self._doSynopsis = state
-        return
-
-    def setComments(self, state: bool) -> None:
-        """Include comments in build."""
-        self._doComments = state
+    def setCommentType(self, comment: nwComment, state: bool) -> None:
+        """Toggle the inclusion og certain comment types."""
+        if state:
+            self._doComments.add(comment)
+        else:
+            self._doComments.discard(comment)
         return
 
     def setKeywords(self, state: bool) -> None:
@@ -437,7 +440,7 @@ class Tokenizer(ABC):
     def initDocument(self) -> None:
         """Initialise data after settings."""
         self._classes["modifier"] = self._theme.modifier
-        self._classes["synopsis"] = self._theme.note
+        self._classes["note"] = self._theme.note
         self._classes["comment"] = self._theme.comment
         self._classes["dialog"] = self._theme.dialog
         self._classes["altdialog"] = self._theme.altdialog
@@ -604,15 +607,16 @@ class Tokenizer(ABC):
                     continue
 
                 cStyle, cKey, cText, _, _ = processComment(aLine)
-                if cStyle in (nwComment.SYNOPSIS, nwComment.SHORT) and not self._doSynopsis:
-                    continue
-                if cStyle == nwComment.PLAIN and not self._doComments:
+                if cStyle not in self._doComments:
                     continue
 
                 if doJustify and not tStyle & BlockFmt.ALIGNED:
                     tStyle |= BlockFmt.JUSTIFY
 
-                if cStyle in (nwComment.SYNOPSIS, nwComment.SHORT, nwComment.PLAIN):
+                if cStyle in (
+                    nwComment.SYNOPSIS, nwComment.SHORT, nwComment.PLAIN,
+                    nwComment.STORY, nwComment.NOTE,
+                ):
                     bStyle = COMMENT_STYLE[cStyle]
                     tLine, tFmt = self._formatComment(bStyle, cKey, cText)
                     tBlocks.append((
@@ -651,7 +655,7 @@ class Tokenizer(ABC):
                 tText = aLine[2:].strip()
                 tType = BlockTyp.HEAD1 if isPlain else BlockTyp.TITLE
                 sHide = self._hidePart if isPlain else False
-                if not (isPlain or isNovel and sHide):
+                if not (isPlain or (isNovel and sHide)):
                     tStyle |= self._titleStyle
                 if isNovel:
                     tType = BlockTyp.PART if isPlain else BlockTyp.TITLE
@@ -1034,10 +1038,12 @@ class Tokenizer(ABC):
 
     def _formatComment(self, style: ComStyle, key: str, text: str) -> tuple[str, T_Formats]:
         """Apply formatting to comments and notes."""
+        rFmt = []
         tTxt, tFmt = self._extractFormats(text)
         tFmt.insert(0, (0, TextFmt.COL_B, style.textClass))
         tFmt.append((len(tTxt), TextFmt.COL_E, ""))
-        if label := (self._localLookup(style.label) + (f" ({key})" if key else "")).strip():
+        term = f" ({key.title()})" if key else ""
+        if label := f"{self._localLookup(style.label)}{term}".strip():
             shift = len(label) + 2
             tTxt = f"{label}: {tTxt}"
             rFmt = [(0, TextFmt.B_B, ""), (shift - 1, TextFmt.B_E, "")]
@@ -1123,12 +1129,10 @@ class Tokenizer(ABC):
             temp.append((res.end(0), 0, TextFmt.HRF_E, ""))
 
         # Match Shortcodes
-        for res in REGEX_PATTERNS.shortcodePlain.finditer(text):
-            temp.append((
-                res.start(1), res.end(1),
-                self._shortCodeFmt.get(res.group(1).lower(), 0),
-                "",
-            ))
+        temp.extend(
+            (res.start(1), res.end(1), self._shortCodeFmt.get(res.group(1).lower(), 0), "")
+            for res in REGEX_PATTERNS.shortcodePlain.finditer(text)
+        )
 
         # Match Shortcode w/Values
         tHandle = self._handle or ""

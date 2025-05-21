@@ -37,8 +37,9 @@ from novelwriter.common import (
     formatFileFilter, formatInt, formatTime, formatTimeStamp, formatVersion,
     fuzzyTime, getFileSize, hexToInt, isHandle, isItemClass, isItemLayout,
     isItemType, isListInstance, isTitleTag, jsonEncode, makeFileNameSafe,
-    minmax, numberToRoman, openExternalPath, readTextFile, simplified,
-    transferCase, uniqueCompact, xmlElement, xmlIndent, xmlSubElem, yesNo
+    minmax, numberToRoman, openExternalPath, processDialogSymbols,
+    readTextFile, simplified, transferCase, uniqueCompact, xmlElement,
+    xmlIndent, xmlSubElem, yesNo
 )
 
 from tests.mocked import causeOSError
@@ -378,6 +379,14 @@ def testBaseCommon_uniqueCompact():
 
 
 @pytest.mark.base
+def testBaseCommon_processDialogSymbols():
+    """Test the processDialogSymbols function."""
+    assert processDialogSymbols("abc") == ""
+    assert processDialogSymbols("\u00ab\u00ab\u00bb\u00bb") == "\u00ab\u00bb"
+    assert processDialogSymbols("-\u2013\u2014\u2015") == "\u2013\u2014\u2015"
+
+
+@pytest.mark.base
 def testBaseCommon_elide():
     """Test the elide function."""
     assert elide("Hello World!", 12) == "Hello World!"
@@ -556,7 +565,7 @@ def testBaseCommon_jsonEncode():
     # Correct types
     assert jsonEncode([1, 2]) == "[\n  1,\n  2\n]"
     assert jsonEncode((1, 2)) == "[\n  1,\n  2\n]"
-    assert jsonEncode({1: 2}) == "{\n  \"1\": 2\n}"
+    assert jsonEncode({1: 2}) == '{\n  "1": 2\n}'
 
     tstDict = {
         "null": None,

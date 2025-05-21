@@ -26,6 +26,7 @@ from __future__ import annotations
 import logging
 
 from time import time
+from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import Qt, pyqtSignal, pyqtSlot
 from PyQt6.QtGui import QAction, QCursor, QKeyEvent, QPalette
@@ -37,11 +38,13 @@ from PyQt6.QtWidgets import (
 from novelwriter import CONFIG, SHARED
 from novelwriter.common import checkInt, qtAddAction
 from novelwriter.core.coretools import DocSearch
-from novelwriter.core.item import NWItem
 from novelwriter.types import (
     QtAlignMiddle, QtAlignRight, QtHeaderStretch, QtHeaderToContents,
     QtHexArgb, QtUserRole
 )
+
+if TYPE_CHECKING:
+    from novelwriter.core.item import NWItem
 
 logger = logging.getLogger(__name__)
 
@@ -122,6 +125,7 @@ class GuiProjectSearch(QWidget):
         self.searchResult.setAllColumnsShowFocus(True)
         self.searchResult.itemDoubleClicked.connect(self._searchResultDoubleClicked)
         self.searchResult.itemSelectionChanged.connect(self._searchResultSelected)
+        self.searchResult.setAccessibleName(self.viewLabel.text())
 
         if header := self.searchResult.header():
             header.setStretchLastSection(False)

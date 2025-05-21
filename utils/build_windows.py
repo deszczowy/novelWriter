@@ -65,12 +65,12 @@ def embedPython(bldDir: Path, outDir: Path) -> None:
     """Embed Python library."""
     print("Adding Python embeddable ...")
 
-    pyVers = "%d.%d.%d" % (sys.version_info[:3])
+    pyVers = ".".join(str(v) for v in sys.version_info[:3])
     zipFile = f"python-{pyVers}-embed-amd64.zip"
     pyZip = bldDir / zipFile
     if not pyZip.is_file():
         pyUrl = f"https://www.python.org/ftp/python/{pyVers}/{zipFile}"
-        print("Downloading: %s" % pyUrl)
+        print(f"Downloading: {pyUrl}")
         urllib.request.urlretrieve(pyUrl, pyZip)
 
     print("Extracting ...")
@@ -192,7 +192,7 @@ def main(args: argparse.Namespace) -> None:
     print("")
 
     numVers, _, _ = extractVersion()
-    print("Version: %s" % numVers)
+    print(f"Version: {numVers}")
 
     bldDir = ROOT_DIR / "dist"
     outDir = bldDir / "novelWriter"
@@ -214,14 +214,13 @@ def main(args: argparse.Namespace) -> None:
 
     print("Updating starting script ...")
     writeFile(outDir / "novelWriter.pyw", (
-        "#!/usr/bin/env python3\n"
         "import os\n"
         "import sys\n"
         "\n"
         "os.curdir = os.path.abspath(os.path.dirname(__file__))\n"
-        "sys.path.insert(0, os.path.join(os.curdir, \"lib\"))\n"
+        'sys.path.insert(0, os.path.join(os.curdir, "lib"))\n'
         "\n"
-        "if __name__ == \"__main__\":\n"
+        'if __name__ == "__main__":\n'
         "    import novelwriter\n"
         "    novelwriter.main(sys.argv[1:])\n"
     ))

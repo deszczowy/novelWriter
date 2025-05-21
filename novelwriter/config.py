@@ -29,27 +29,29 @@ import json
 import logging
 import sys
 
-from datetime import datetime
 from pathlib import Path
 from time import time
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from PyQt6.QtCore import (
-    PYQT_VERSION, PYQT_VERSION_STR, QT_VERSION, QT_VERSION_STR, QLibraryInfo,
-    QLocale, QStandardPaths, QSysInfo, QTranslator
+    PYQT_VERSION, PYQT_VERSION_STR, QT_VERSION, QT_VERSION_STR, QDate,
+    QDateTime, QLibraryInfo, QLocale, QStandardPaths, QSysInfo, QTranslator
 )
-from PyQt6.QtGui import QFont, QFontDatabase
+from PyQt6.QtGui import QFont, QFontDatabase, QFontMetrics
 from PyQt6.QtWidgets import QApplication
 
 from novelwriter.common import (
     NWConfigParser, checkInt, checkPath, describeFont, fontMatcher,
-    formatTimeStamp
+    formatTimeStamp, processDialogSymbols, simplified
 )
-from novelwriter.constants import nwFiles, nwUnicode
+from novelwriter.constants import nwFiles, nwHtmlUnicode, nwQuotes, nwUnicode
 from novelwriter.error import formatException, logException
 
-if TYPE_CHECKING:  # pragma: no cover
+if TYPE_CHECKING:
+    from datetime import datetime
+
     from novelwriter.core.projectdata import NWProjectData
+    from novelwriter.splash import NSplashScreen
 
 logger = logging.getLogger(__name__)
 
@@ -62,28 +64,27 @@ DEF_TREECOL = "theme"
 class Config:
 
     __slots__ = (
-        "_confPath", "_dataPath", "_homePath", "_backPath", "_appPath", "_appRoot", "_hasError",
-        "_errData", "_nwLangPath", "_qtLangPath", "_qLocale", "_dLocale", "_dShortDate", "_tempPath",
-        "_dShortDateTime", "_qtTrans", "_manuals", "_recentProjects", "_recentPaths",
-        "_backupPath",
-        "appName", "appHandle", "guiLocale", "guiTheme", "guiSyntax", "guiFont", "hideVScroll",
-        "hideHScroll", "lastNotes", "nativeFont", "iconTheme", "iconColTree", "iconColDocs",
-        "mainWinSize", "welcomeWinSize", "prefsWinSize", "mainPanePos", "viewPanePos",
-        "outlinePanePos", "autoSaveProj", "autoSaveDoc", "emphLabels", "backupOnClose",
-        "askBeforeBackup", "askBeforeExit", "textFont", "textWidth", "textMargin", "tabWidth",
-        "cursorWidth", "focusWidth", "hideFocusFooter", "showFullPath", "autoSelect", "doJustify",
-        "showTabsNSpaces", "showLineEndings", "showMultiSpaces", "doReplace", "doReplaceSQuote",
-        "doReplaceDQuote", "doReplaceDash", "doReplaceDots", "autoScroll", "autoScrollPos",
-        "scrollPastEnd", "dialogStyle", "allowOpenDial", "dialogLine", "narratorBreak",
-        "narratorDialog", "altDialogOpen", "altDialogClose", "highlightEmph", "stopWhenIdle",
-        "userIdleTime", "incNotesWCount", "fmtApostrophe", "fmtSQuoteOpen", "fmtSQuoteClose",
-        "fmtDQuoteOpen", "fmtDQuoteClose", "fmtPadBefore", "fmtPadAfter", "fmtPadThin",
-        "spellLanguage", "showViewerPanel", "showEditToolBar", "showSessionTime", "viewComments",
-        "viewSynopsis", "searchCase", "searchWord", "searchRegEx", "searchLoop", "searchNextFile",
-        "searchMatchCap", "searchProjCase", "searchProjWord", "searchProjRegEx", "verQtString",
-        "verQtValue", "verPyQtString", "verPyQtValue", "verPyString", "osType", "osLinux",
-        "osWindows", "osDarwin", "osUnknown", "hostName", "kernelVer", "isDebug", "memInfo",
-        "hasEnchant",
+        "_appPath", "_appRoot", "_backPath", "_backupPath", "_confPath", "_dLocale", "_dShortDate",
+        "_dShortDateTime", "_dataPath", "_errData", "_hasError", "_homePath", "_lastAuthor",
+        "_manuals", "_nwLangPath", "_qLocale", "_qtLangPath", "_qtTrans", "_recentPaths",
+        "_recentProjects", "_splash", "allowOpenDial", "altDialogClose", "altDialogOpen",
+        "appHandle", "appName", "askBeforeBackup", "askBeforeExit", "autoSaveDoc", "autoSaveProj",
+        "autoScroll", "autoScrollPos", "autoSelect", "backupOnClose", "cursorWidth", "dialogLine",
+        "dialogStyle", "doJustify", "doReplace", "doReplaceDQuote", "doReplaceDash",
+        "doReplaceDots", "doReplaceSQuote", "emphLabels", "fmtApostrophe", "fmtDQuoteClose",
+        "fmtDQuoteOpen", "fmtPadAfter", "fmtPadBefore", "fmtPadThin", "fmtSQuoteClose",
+        "fmtSQuoteOpen", "focusWidth", "guiFont", "guiLocale", "guiSyntax", "guiTheme",
+        "hasEnchant", "hideFocusFooter", "hideHScroll", "hideVScroll", "highlightEmph", "hostName",
+        "iconColDocs", "iconColTree", "iconTheme", "incNotesWCount", "isDebug", "kernelVer",
+        "lastNotes", "mainPanePos", "mainWinSize", "memInfo", "narratorBreak", "narratorDialog",
+        "nativeFont", "osDarwin", "osLinux", "osType", "osUnknown", "osWindows", "outlinePanePos",
+        "prefsWinSize", "scrollPastEnd", "searchCase", "searchLoop", "searchMatchCap",
+        "searchNextFile", "searchProjCase", "searchProjRegEx", "searchProjWord", "searchRegEx",
+        "searchWord", "showEditToolBar", "showFullPath", "showLineEndings", "showMultiSpaces",
+        "showSessionTime", "showTabsNSpaces", "showViewerPanel", "spellLanguage", "stopWhenIdle",
+        "tabWidth", "textFont", "textMargin", "textWidth", "useCharCount", "userIdleTime",
+        "verPyQtString", "verPyQtValue", "verPyString", "verQtString", "verQtValue",
+        "viewComments", "viewPanePos", "viewSynopsis", "welcomeWinSize", "_tempPath",
     )
 
     LANG_NW   = 1
@@ -93,6 +94,8 @@ class Config:
 
         # Initialisation
         # ==============
+
+        self._splash = None
 
         # Set Application Variables
         self.appName   = "novelWriter"
@@ -151,6 +154,7 @@ class Config:
 
         self._recentProjects = RecentProjects(self)
         self._recentPaths = RecentPaths(self)
+        self._lastAuthor = ""
 
         # General GUI Settings
         self.guiLocale    = self._qLocale.name()
@@ -161,6 +165,7 @@ class Config:
         self.hideHScroll  = False       # Hide horizontal scroll bars on main widgets
         self.lastNotes    = "0x0"       # The latest release notes that have been shown
         self.nativeFont   = True        # Use native font dialog
+        self.useCharCount = False       # Use character count as primary count
 
         # Icons
         self.iconTheme   = DEF_ICONS    # Icons theme
@@ -307,7 +312,12 @@ class Config:
 
     @property
     def pdfDocs(self) -> Path | None:
-        return self._manuals.get(f"manual_{self.locale.name()}", self._manuals.get("manual"))
+        """Return the local manual PDF file, if any exist."""
+        return self._manuals.get(f"manual_{self.locale.bcp47Name()}", self._manuals.get("manual"))
+
+    @property
+    def nwLangPath(self) -> Path:
+        return self._nwLangPath
 
     @property
     def locale(self) -> QLocale:
@@ -316,6 +326,11 @@ class Config:
     @property
     def recentProjects(self) -> RecentProjects:
         return self._recentProjects
+
+    @property
+    def lastAuthor(self) -> str:
+        """Return the last author name used."""
+        return simplified(self._lastAuthor)
 
     ##
     #  Getters
@@ -331,6 +346,11 @@ class Config:
     ##
     #  Setters
     ##
+
+    def setLastAuthor(self, value: str) -> None:
+        """Set tle last used author name."""
+        self._lastAuthor = simplified(value)
+        return
 
     def setMainWinSize(self, width: int, height: int) -> None:
         """Set the size of the main window, but only if the change is
@@ -358,7 +378,7 @@ class Config:
         """Set the last used path. Only the folder is saved, so if the
         path is not a folder, the parent of the path is used instead.
         """
-        if isinstance(path, (str, Path)):
+        if isinstance(path, str | Path):
             path = checkPath(path, self._homePath)
             if not path.is_dir():
                 path = path.parent
@@ -469,11 +489,16 @@ class Config:
 
     def localDate(self, value: datetime) -> str:
         """Return a localised date format."""
-        return self._dLocale.toString(value, self._dShortDate)
+        # Explicitly convert the date first, see bug #2325
+        return self._dLocale.toString(QDate(value.year, value.month, value.day), self._dShortDate)
 
     def localDateTime(self, value: datetime) -> str:
         """Return a localised datetime format."""
-        return self._dLocale.toString(value, self._dShortDateTime)
+        # Explicitly convert the datetime first, see bug #2325
+        return self._dLocale.toString(
+            QDateTime(value.year, value.month, value.day, value.hour, value.minute, value.second),
+            self._dShortDateTime,
+        )
 
     def listLanguages(self, lngSet: int) -> list[tuple[str, str]]:
         """List localisation files in the i18n folder. The default GUI
@@ -502,6 +527,12 @@ class Config:
 
         return sorted(langList.items(), key=lambda x: x[0])
 
+    def splashMessage(self, message: str) -> None:
+        """Send a message to the splash screen."""
+        if self._splash:
+            self._splash.showStatus(message)
+        return
+
     ##
     #  Config Actions
     ##
@@ -513,10 +544,10 @@ class Config:
         and dataPath is mainly intended for the test suite.
         """
         logger.debug("Initialising Config ...")
-        if isinstance(confPath, (str, Path)):
+        if isinstance(confPath, str | Path):
             logger.info("Setting alternative config path: %s", confPath)
             self._confPath = Path(confPath)
-        if isinstance(dataPath, (str, Path)):
+        if isinstance(dataPath, str | Path):
             logger.info("Setting alternative data path: %s", dataPath)
             self._dataPath = Path(dataPath)
 
@@ -549,6 +580,8 @@ class Config:
 
     def initLocalisation(self, nwApp: QApplication) -> None:
         """Initialise the localisation of the GUI."""
+        self.splashMessage("Loading localisation ...")
+
         self._qLocale = QLocale(self.guiLocale)
         QLocale.setDefault(self._qLocale)
         self._qtTrans = {}
@@ -565,7 +598,7 @@ class Config:
         for lngPath, lngBase in langList:
             for lngCode in self._qLocale.uiLanguages():
                 qTrans = QTranslator()
-                lngFile = "%s_%s" % (lngBase, lngCode.replace("-", "_"))
+                lngFile = "{0}_{1}".format(lngBase, lngCode.replace("-", "_"))
                 if lngFile not in self._qtTrans:
                     if qTrans.load(lngFile, lngPath):
                         logger.debug("Loaded: %s.qm", lngFile)
@@ -574,8 +607,11 @@ class Config:
 
         return
 
-    def loadConfig(self) -> bool:
+    def loadConfig(self, splash: NSplashScreen | None = None) -> bool:
         """Load preferences from file and replace default settings."""
+        self._splash = splash
+        self.splashMessage("Loading user configuration ...")
+
         logger.debug("Loading config file")
 
         conf = NWConfigParser()
@@ -602,16 +638,17 @@ class Config:
         # Main
         sec = "Main"
         self.setGuiFont(conf.rdStr(sec, "font", ""))
-        self.guiTheme    = conf.rdStr(sec, "theme", self.guiTheme)
-        self.guiSyntax   = conf.rdStr(sec, "syntax", self.guiSyntax)
-        self.iconTheme   = conf.rdStr(sec, "icons", self.iconTheme)
-        self.iconColTree = conf.rdStr(sec, "iconcoltree", self.iconColTree)
-        self.iconColDocs = conf.rdBool(sec, "iconcoldocs", self.iconColDocs)
-        self.guiLocale   = conf.rdStr(sec, "localisation", self.guiLocale)
-        self.hideVScroll = conf.rdBool(sec, "hidevscroll", self.hideVScroll)
-        self.hideHScroll = conf.rdBool(sec, "hidehscroll", self.hideHScroll)
-        self.lastNotes   = conf.rdStr(sec, "lastnotes", self.lastNotes)
-        self.nativeFont  = conf.rdBool(sec, "nativefont", self.nativeFont)
+        self.guiTheme     = conf.rdStr(sec, "theme", self.guiTheme)
+        self.guiSyntax    = conf.rdStr(sec, "syntax", self.guiSyntax)
+        self.iconTheme    = conf.rdStr(sec, "icons", self.iconTheme)
+        self.iconColTree  = conf.rdStr(sec, "iconcoltree", self.iconColTree)
+        self.iconColDocs  = conf.rdBool(sec, "iconcoldocs", self.iconColDocs)
+        self.guiLocale    = conf.rdStr(sec, "localisation", self.guiLocale)
+        self.hideVScroll  = conf.rdBool(sec, "hidevscroll", self.hideVScroll)
+        self.hideHScroll  = conf.rdBool(sec, "hidehscroll", self.hideHScroll)
+        self.lastNotes    = conf.rdStr(sec, "lastnotes", self.lastNotes)
+        self.nativeFont   = conf.rdBool(sec, "nativefont", self.nativeFont)
+        self.useCharCount = conf.rdBool(sec, "usecharcount", self.useCharCount)
 
         # Sizes
         sec = "Sizes"
@@ -631,6 +668,7 @@ class Config:
         self.backupOnClose   = conf.rdBool(sec, "backuponclose", self.backupOnClose)
         self.askBeforeBackup = conf.rdBool(sec, "askbeforebackup", self.askBeforeBackup)
         self.askBeforeExit   = conf.rdBool(sec, "askbeforeexit", self.askBeforeExit)
+        self._lastAuthor     = conf.rdStr(sec, "lastauthor", self._lastAuthor)
 
         # Editor
         sec = "Editor"
@@ -666,9 +704,9 @@ class Config:
         self.showFullPath    = conf.rdBool(sec, "showfullpath", self.showFullPath)
         self.dialogStyle     = conf.rdInt(sec, "dialogstyle", self.dialogStyle)
         self.allowOpenDial   = conf.rdBool(sec, "allowopendial", self.allowOpenDial)
-        self.dialogLine      = conf.rdStr(sec, "dialogline", self.dialogLine)
-        self.narratorBreak   = conf.rdStr(sec, "narratorbreak", self.narratorBreak)
-        self.narratorDialog  = conf.rdStr(sec, "narratordialog", self.narratorDialog)
+        dialogLine           = conf.rdStr(sec, "dialogline", self.dialogLine)
+        narratorBreak        = conf.rdStr(sec, "narratorbreak", self.narratorBreak)
+        narratorDialog       = conf.rdStr(sec, "narratordialog", self.narratorDialog)
         self.altDialogOpen   = conf.rdStr(sec, "altdialogopen", self.altDialogOpen)
         self.altDialogClose  = conf.rdStr(sec, "altdialogclose", self.altDialogClose)
         self.highlightEmph   = conf.rdBool(sec, "highlightemph", self.highlightEmph)
@@ -695,6 +733,9 @@ class Config:
         # Check Values
         # ============
 
+        self._prepareFont(self.guiFont, "GUI")
+        self._prepareFont(self.textFont, "document")
+
         # If we're using straight quotes, disable auto-replace
         if self.fmtSQuoteOpen == self.fmtSQuoteClose == "'" and self.doReplaceSQuote:
             logger.info("Using straight single quotes, so disabling auto-replace")
@@ -703,6 +744,10 @@ class Config:
         if self.fmtDQuoteOpen == self.fmtDQuoteClose == '"' and self.doReplaceDQuote:
             logger.info("Using straight double quotes, so disabling auto-replace")
             self.doReplaceDQuote = False
+
+        self.dialogLine = processDialogSymbols(dialogLine)
+        self.narratorBreak = narratorBreak if narratorBreak in nwQuotes.DASHES else ""
+        self.narratorDialog = narratorDialog if narratorDialog in nwQuotes.DASHES else ""
 
         return True
 
@@ -728,6 +773,7 @@ class Config:
             "hidehscroll":  str(self.hideHScroll),
             "lastnotes":    str(self.lastNotes),
             "nativefont":   str(self.nativeFont),
+            "usecharcount": str(self.useCharCount),
         }
 
         conf["Sizes"] = {
@@ -747,6 +793,7 @@ class Config:
             "backuponclose":   str(self.backupOnClose),
             "askbeforebackup": str(self.askBeforeBackup),
             "askbeforeexit":   str(self.askBeforeExit),
+            "lastauthor":      str(self._lastAuthor),
         }
 
         conf["Editor"] = {
@@ -824,6 +871,11 @@ class Config:
 
         return True
 
+    def finishStartup(self) -> None:
+        """Call after startup is complete."""
+        self._splash = None
+        return
+
     ##
     #  Internal Functions
     ##
@@ -844,6 +896,17 @@ class Config:
         else:
             self.hasEnchant = True
             logger.debug("Checking package 'pyenchant': OK")
+        return
+
+    def _prepareFont(self, font: QFont, kind: str) -> None:
+        """Check Unicode availability in font. This also initialises any
+        alternative character used for missing glyphs. See #2315.
+        """
+        self.splashMessage(f"Initialising {kind} font: {font.family()}")
+        metrics = QFontMetrics(font)
+        for char in nwHtmlUnicode.U_TO_H.keys():
+            if not metrics.inFont(char):  # type: ignore
+                logger.warning("No glyph U+%04x in font", ord(char))  # pragma: no cover
         return
 
 
@@ -868,9 +931,10 @@ class RecentProjects:
                     puuid = str(entry.get("uuid", ""))
                     title = str(entry.get("title", ""))
                     words = checkInt(entry.get("words", 0), 0)
+                    chars = checkInt(entry.get("chars", 0), 0)
                     saved = checkInt(entry.get("time", 0), 0)
                     if path and title:
-                        self._setEntry(puuid, path, title, words, saved)
+                        self._setEntry(puuid, path, title, words, chars, saved)
             except Exception:
                 logger.error("Could not load recent project cache")
                 logException()
@@ -903,7 +967,14 @@ class RecentProjects:
         try:
             if (remove := self._map.get(data.uuid)) and (remove != str(path)):
                 self.remove(remove)
-            self._setEntry(data.uuid, str(path), data.name, sum(data.currCounts), int(saved))
+            self._setEntry(
+                data.uuid,
+                str(path),
+                data.name,
+                sum(data.currCounts[:2]),
+                sum(data.currCounts[2:]),
+                int(saved),
+            )
             self.saveCache()
         except Exception:
             pass
@@ -916,9 +987,17 @@ class RecentProjects:
             self.saveCache()
         return
 
-    def _setEntry(self, puuid: str, path: str, title: str, words: int, saved: int) -> None:
+    def _setEntry(
+        self, puuid: str, path: str, title: str, words: int, chars: int, saved: int
+    ) -> None:
         """Set an entry in the recent projects record."""
-        self._data[path] = {"uuid": puuid, "title": title, "words": words, "time": saved}
+        self._data[path] = {
+            "uuid": puuid,
+            "title": title,
+            "words": words,
+            "chars": chars,
+            "time": saved,
+        }
         if puuid:
             self._map[puuid] = path
         return
@@ -926,7 +1005,7 @@ class RecentProjects:
 
 class RecentPaths:
 
-    KEYS = ["default", "project", "import", "outline", "stats"]
+    KEYS: Final[list[str]] = ["default", "project", "import", "outline", "stats"]
 
     def __init__(self, config: Config) -> None:
         self._conf = config

@@ -41,6 +41,7 @@ See :ref:`a_started` for more details.
    :hidden:
 
    Main Page <self>
+   More Documents <https://novelwriter.io/more/>
 
 .. toctree::
    :maxdepth: 1
@@ -74,6 +75,13 @@ See :ref:`a_started` for more details.
    project_structure
    project_references
    project_manuscript
+
+.. toctree::
+   :maxdepth: 1
+   :caption: Writing Aids
+   :hidden:
+
+   writing_story
 
 .. toctree::
    :maxdepth: 1

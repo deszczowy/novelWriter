@@ -23,17 +23,17 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 """
 from __future__ import annotations
 
-from PyQt6.QtCore import QPropertyAnimation, Qt, pyqtProperty
-from PyQt6.QtGui import QEnterEvent, QMouseEvent, QPainter, QPaintEvent, QResizeEvent
+from PyQt6.QtCore import QPropertyAnimation, Qt, pyqtProperty, pyqtSlot  # pyright: ignore
+from PyQt6.QtGui import QEnterEvent, QPainter, QPaintEvent, QResizeEvent
 from PyQt6.QtWidgets import QAbstractButton, QWidget
 
 from novelwriter import SHARED
-from novelwriter.types import QtMouseLeft, QtNoPen, QtPaintAntiAlias, QtSizeFixed
+from novelwriter.types import QtNoPen, QtPaintAntiAlias, QtSizeFixed
 
 
 class NSwitch(QAbstractButton):
 
-    __slots__ = ("_xW", "_xH", "_xR", "_rH", "_rR", "_offset")
+    __slots__ = ("_offset", "_rH", "_rR", "_xH", "_xR", "_xW")
 
     def __init__(self, parent: QWidget, height: int = 0) -> None:
         super().__init__(parent=parent)
@@ -50,6 +50,8 @@ class NSwitch(QAbstractButton):
         self.setFixedHeight(self._xH)
         self._offset = self._xR
 
+        self.clicked.connect(self._onClick)
+
         return
 
     ##
@@ -60,7 +62,7 @@ class NSwitch(QAbstractButton):
     def offset(self) -> int:  # type: ignore
         return self._offset
 
-    @offset.setter
+    @offset.setter  # type: ignore
     def offset(self, offset: int) -> None:
         self._offset = offset
         self.update()
@@ -94,7 +96,7 @@ class NSwitch(QAbstractButton):
         painter.setRenderHint(QtPaintAntiAlias, True)
         painter.setOpacity(1.0 if self.isEnabled() else 0.5)
 
-        painter.setPen(palette.mid().color())
+        painter.setPen(palette.highlight().color() if self.hasFocus() else palette.mid().color())
         painter.setBrush(palette.highlight() if self.isChecked() else palette.alternateBase())
         painter.drawRoundedRect(0, 0, self._xW, self._xH, self._xR, self._xR)
 
@@ -106,19 +108,18 @@ class NSwitch(QAbstractButton):
 
         return
 
-    def mouseReleaseEvent(self, event: QMouseEvent) -> None:
-        """Animate the switch on mouse release."""
-        super().mouseReleaseEvent(event)
-        if event.button() == QtMouseLeft:
-            anim = QPropertyAnimation(self, b"offset", self)
-            anim.setDuration(120)
-            anim.setStartValue(self._offset)
-            anim.setEndValue((self._xW - self._xR) if self.isChecked() else self._xR)
-            anim.start()
-        return
-
     def enterEvent(self, event: QEnterEvent) -> None:
         """Change the cursor when hovering the button."""
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         super().enterEvent(event)
+        return
+
+    @pyqtSlot(bool)
+    def _onClick(self, checked: bool) -> None:
+        """Animate the toggle action."""
+        anim = QPropertyAnimation(self, b"offset", self)
+        anim.setDuration(120)
+        anim.setStartValue(self._offset)
+        anim.setEndValue((self._xW - self._xR) if checked else self._xR)
+        anim.start()
         return

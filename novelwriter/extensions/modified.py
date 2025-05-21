@@ -27,20 +27,22 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 """
 from __future__ import annotations
 
-from enum import Enum
 from typing import TYPE_CHECKING
 
-from PyQt6.QtCore import QSize, Qt, pyqtSignal, pyqtSlot
-from PyQt6.QtGui import QMouseEvent, QWheelEvent
+from PyQt6.QtCore import QModelIndex, QSize, Qt, pyqtSignal, pyqtSlot
 from PyQt6.QtWidgets import (
     QApplication, QComboBox, QDialog, QDoubleSpinBox, QLabel, QSpinBox,
-    QToolButton, QWidget
+    QToolButton, QTreeView, QWidget
 )
 
 from novelwriter import CONFIG, SHARED
-from novelwriter.types import QtMouseLeft
+from novelwriter.types import QtMouseLeft, QtMouseMiddle
 
-if TYPE_CHECKING:  # pragma: no cover
+if TYPE_CHECKING:
+    from enum import Enum
+
+    from PyQt6.QtGui import QMouseEvent, QWheelEvent
+
     from novelwriter.guimain import GuiMain
 
 
@@ -99,6 +101,20 @@ class NNonBlockingDialog(NDialog):
         return
 
 
+class NTreeView(QTreeView):
+
+    middleClicked = pyqtSignal(QModelIndex)
+
+    def mousePressEvent(self, event: QMouseEvent | None) -> None:
+        """Emit a signal on mouse middle click."""
+        if (
+            event and event.button() == QtMouseMiddle
+            and (index := self.indexAt(event.pos())).isValid()
+        ):
+            self.middleClicked.emit(index)
+        return super().mousePressEvent(event)
+
+
 class NComboBox(QComboBox):
 
     def __init__(self, parent: QWidget | None = None) -> None:
@@ -141,15 +157,15 @@ class NDoubleSpinBox(QDoubleSpinBox):
         self,
         parent: QWidget | None = None,
         *,
-        min: float = 0.0,
-        max: float = 15.0,
+        minVal: float = 0.0,
+        maxVal: float = 15.0,
         step: float = 0.1,
         prec: int = 2,
     ) -> None:
         super().__init__(parent=parent)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
-        self.setMinimum(min)
-        self.setMaximum(max)
+        self.setMinimum(minVal)
+        self.setMaximum(maxVal)
         self.setSingleStep(step)
         self.setDecimals(prec)
         return

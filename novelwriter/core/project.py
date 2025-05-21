@@ -30,6 +30,7 @@ from enum import Enum
 from functools import partial
 from pathlib import Path
 from time import time
+from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import QCoreApplication
 
@@ -44,11 +45,13 @@ from novelwriter.core.options import OptionState
 from novelwriter.core.projectdata import NWProjectData
 from novelwriter.core.projectxml import ProjectXMLReader, ProjectXMLWriter, XMLReadState
 from novelwriter.core.sessions import NWSessionLog
-from novelwriter.core.status import T_StatusKind, T_UpdateEntry
 from novelwriter.core.storage import NWStorage, NWStorageOpen
 from novelwriter.core.tree import NWTree
 from novelwriter.enum import nwItemClass, nwItemLayout, nwItemType
 from novelwriter.error import logException
+
+if TYPE_CHECKING:
+    from novelwriter.core.status import T_StatusKind, T_UpdateEntry
 
 logger = logging.getLogger(__name__)
 
@@ -64,8 +67,8 @@ class NWProjectState(Enum):
 class NWProject:
 
     __slots__ = (
-        "_options", "_storage", "_data", "_tree", "_index", "_session",
-        "_langData", "_changed", "_valid", "_state", "tr",
+        "_changed", "_data", "_index", "_langData", "_options", "_session",
+        "_state", "_storage", "_tree", "_valid", "tr",
     )
 
     def __init__(self) -> None:
@@ -364,7 +367,7 @@ class NWProject:
             # Often, the index needs to be rebuilt when updating format
             self._index.rebuild()
 
-        self.updateWordCounts()
+        self.updateCounts()
         self._session.startSession()
         self.setProjectChanged(False)
         self._valid = True
@@ -394,7 +397,7 @@ class NWProject:
         else:
             self._data.incSaveCount()
 
-        self.updateWordCounts()
+        self.updateCounts()
         self.countStatus()
 
         xmlWriter = self._storage.getXmlWriter()
@@ -480,14 +483,14 @@ class NWProject:
 
     def setDefaultStatusImport(self) -> None:
         """Set the default status and importance values."""
-        self._data.itemStatus.add(None, self.tr("New"),      (100, 100, 100), "SQUARE", 0)
-        self._data.itemStatus.add(None, self.tr("Note"),     (200, 50,  0),   "SQUARE", 0)
-        self._data.itemStatus.add(None, self.tr("Draft"),    (200, 150, 0),   "SQUARE", 0)
-        self._data.itemStatus.add(None, self.tr("Finished"), (50,  200, 0),   "SQUARE", 0)
-        self._data.itemImport.add(None, self.tr("New"),      (100, 100, 100), "SQUARE", 0)
-        self._data.itemImport.add(None, self.tr("Minor"),    (200, 50,  0),   "SQUARE", 0)
-        self._data.itemImport.add(None, self.tr("Major"),    (200, 150, 0),   "SQUARE", 0)
-        self._data.itemImport.add(None, self.tr("Main"),     (50,  200, 0),   "SQUARE", 0)
+        self._data.itemStatus.add(None, self.tr("New"),      (120, 120, 120), "STAR", 0)
+        self._data.itemStatus.add(None, self.tr("Note"),     (205, 171, 143), "TRIANGLE", 0)
+        self._data.itemStatus.add(None, self.tr("Draft"),    (143, 240, 164), "CIRCLE_T", 0)
+        self._data.itemStatus.add(None, self.tr("Finished"), (249, 240, 107), "STAR", 0)
+        self._data.itemImport.add(None, self.tr("New"),      (120, 120, 120), "SQUARE", 0)
+        self._data.itemImport.add(None, self.tr("Minor"),    (220, 138, 221), "BLOCK_2", 0)
+        self._data.itemImport.add(None, self.tr("Major"),    (220, 138, 221), "BLOCK_3", 0)
+        self._data.itemImport.add(None, self.tr("Main"),     (220, 138, 221), "BLOCK_4", 0)
         return
 
     def setProjectLang(self, language: str | None) -> None:
@@ -512,10 +515,10 @@ class NWProject:
     #  Class Methods
     ##
 
-    def updateWordCounts(self) -> None:
-        """Update the total word count values."""
-        novel, notes = self._tree.sumWords()
-        self._data.setCurrCounts(novel=novel, notes=notes)
+    def updateCounts(self) -> None:
+        """Update the total word and character count values."""
+        wNovel, wNotes, cNovel, cNotes = self._tree.sumCounts()
+        self._data.setCurrCounts(wNovel=wNovel, wNotes=wNotes, cNovel=cNovel, cNotes=cNotes)
         return
 
     def countStatus(self) -> None:
@@ -557,13 +560,13 @@ class NWProject:
 
     def _loadProjectLocalisation(self) -> bool:
         """Load the language data for the current project language."""
-        if self._data.language is None or CONFIG._nwLangPath is None:
+        if self._data.language is None or CONFIG.nwLangPath is None:
             self._langData = {}
             return False
 
-        langFile = Path(CONFIG._nwLangPath) / f"project_{self._data.language}.json"
+        langFile = Path(CONFIG.nwLangPath) / f"project_{self._data.language}.json"
         if not langFile.is_file():
-            langFile = Path(CONFIG._nwLangPath) / "project_en_GB.json"
+            langFile = Path(CONFIG.nwLangPath) / "project_en_GB.json"
 
         try:
             with open(langFile, mode="r", encoding="utf-8") as inFile:

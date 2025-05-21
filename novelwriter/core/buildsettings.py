@@ -28,9 +28,9 @@ import json
 import logging
 import uuid
 
-from collections.abc import Iterable
 from enum import Enum
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import QT_TRANSLATE_NOOP, QCoreApplication
 
@@ -41,13 +41,18 @@ from novelwriter.core.project import NWProject
 from novelwriter.enum import nwBuildFmt
 from novelwriter.error import logException
 
+if TYPE_CHECKING:
+    from collections.abc import Iterable
+
 logger = logging.getLogger(__name__)
+
+T_BuildValue = str | int | float | bool
 
 # The Settings Template
 # =====================
 # Each entry contains a tuple on the form: (type, default)
 
-SETTINGS_TEMPLATE: dict[str, tuple[type, str | int | float | bool]] = {
+SETTINGS_TEMPLATE: dict[str, tuple[type, T_BuildValue]] = {
     "filter.includeNovel":     (bool, True),
     "filter.includeNotes":     (bool, False),
     "filter.includeInactive":  (bool, False),
@@ -73,6 +78,8 @@ SETTINGS_TEMPLATE: dict[str, tuple[type, str | int | float | bool]] = {
     "headings.breakScene":     (bool, False),
     "text.includeSynopsis":    (bool, False),
     "text.includeComments":    (bool, False),
+    "text.includeStory":       (bool, False),
+    "text.includeNotes":       (bool, False),
     "text.includeKeywords":    (bool, False),
     "text.includeBodyText":    (bool, True),
     "text.ignoredKeywords":    (str, ""),
@@ -139,6 +146,8 @@ SETTINGS_LABELS = {
     "text.grpContent":         QT_TRANSLATE_NOOP("Builds", "Text Content"),
     "text.includeSynopsis":    QT_TRANSLATE_NOOP("Builds", "Include Synopsis"),
     "text.includeComments":    QT_TRANSLATE_NOOP("Builds", "Include Comments"),
+    "text.includeStory":       QT_TRANSLATE_NOOP("Builds", "Include Story Structure"),
+    "text.includeNotes":       QT_TRANSLATE_NOOP("Builds", "Include Manuscript Notes"),
     "text.includeKeywords":    QT_TRANSLATE_NOOP("Builds", "Include Keywords"),
     "text.includeBodyText":    QT_TRANSLATE_NOOP("Builds", "Include Body Text"),
     "text.ignoredKeywords":    QT_TRANSLATE_NOOP("Builds", "Ignore These Keywords"),
@@ -225,9 +234,9 @@ class BuildSettings:
     @classmethod
     def fromDict(cls, data: dict) -> BuildSettings:
         """Create a build settings object from a dict."""
-        cls = BuildSettings()
-        cls.unpack(data)
-        return cls
+        new = cls()
+        new.unpack(data)
+        return new
 
     ##
     #  Properties
@@ -292,12 +301,12 @@ class BuildSettings:
     def getInt(self, key: str) -> int:
         """Type safe value access for integers."""
         value = self._settings.get(key, SETTINGS_TEMPLATE.get(key, (None, None))[1])
-        return int(value) if isinstance(value, (int, float)) else 0
+        return int(value) if isinstance(value, int | float) else 0
 
     def getFloat(self, key: str) -> float:
         """Type safe value access for floats."""
         value = self._settings.get(key, SETTINGS_TEMPLATE.get(key, (None, None))[1])
-        return float(value) if isinstance(value, (int, float)) else 0.0
+        return float(value) if isinstance(value, int | float) else 0.0
 
     ##
     #  Setters
@@ -378,10 +387,10 @@ class BuildSettings:
             self._changed = True
         return
 
-    def setValue(self, key: str, value: str | int | float | bool) -> None:
+    def setValue(self, key: str, value: T_BuildValue) -> None:
         """Set a specific value for a build setting."""
         if (d := SETTINGS_TEMPLATE.get(key)) and len(d) == 2 and isinstance(value, d[0]):
-            self._changed = value != self._settings[key]
+            self._changed |= (value != self._settings[key])
             self._settings[key] = value
         return
 
@@ -502,7 +511,8 @@ class BuildSettings:
         self._settings = {k: v[1] for k, v in SETTINGS_TEMPLATE.items()}
         if isinstance(settings, dict):
             for key, value in settings.items():
-                self.setValue(RENAMED.get(key, key), value)
+                if isinstance(key, str) and isinstance(value, T_BuildValue):
+                    self.setValue(RENAMED.get(key, key), value)
 
         self._changed = False
 
@@ -511,11 +521,11 @@ class BuildSettings:
     @classmethod
     def duplicate(cls, source: BuildSettings) -> BuildSettings:
         """Make a copy of another build."""
-        cls = BuildSettings()
-        cls.unpack(source.pack())
-        cls._uuid = str(uuid.uuid4())
-        cls._name = f"{source.name} 2"
-        return cls
+        new = cls()
+        new.unpack(source.pack())
+        new._uuid = str(uuid.uuid4())
+        new._name = f"{source.name} 2"
+        return new
 
 
 class BuildCollection:

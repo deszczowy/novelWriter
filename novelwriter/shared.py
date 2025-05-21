@@ -40,7 +40,7 @@ from novelwriter.constants import nwFiles
 from novelwriter.core.spellcheck import NWSpellEnchant
 from novelwriter.enum import nwChange, nwItemClass
 
-if TYPE_CHECKING:  # pragma: no cover
+if TYPE_CHECKING:
     from novelwriter.core.project import NWProject
     from novelwriter.core.status import T_StatusKind
     from novelwriter.gui.theme import GuiTheme
@@ -54,8 +54,8 @@ NWWidget = TypeVar("NWWidget", bound=QWidget)
 class SharedData(QObject):
 
     __slots__ = (
-        "_gui", "_theme", "_project", "_spelling", "_lockedBy", "_lastAlert",
-        "_idleTime", "_idleRefTime",
+        "_gui", "_idleRefTime", "_idleTime", "_lastAlert", "_lockedBy",
+        "_project", "_spelling", "_theme",
     )
 
     focusModeChanged = pyqtSignal(bool)
@@ -63,10 +63,11 @@ class SharedData(QObject):
     indexChangedTags = pyqtSignal(list, list)
     indexCleared = pyqtSignal()
     mainClockTick = pyqtSignal()
+    novelStructureChanged = pyqtSignal(str)
     projectItemChanged = pyqtSignal(str, Enum)
-    rootFolderChanged = pyqtSignal(str, Enum)
     projectStatusChanged = pyqtSignal(bool)
     projectStatusMessage = pyqtSignal(str)
+    rootFolderChanged = pyqtSignal(str, Enum)
     spellLanguageChanged = pyqtSignal(str, str)
     statusLabelsChanged = pyqtSignal(str)
 
@@ -100,28 +101,28 @@ class SharedData(QObject):
     def mainGui(self) -> GuiMain:
         """Return the Main GUI instance."""
         if self._gui is None:
-            raise Exception("SharedData class not fully initialised")
+            raise RuntimeError("SharedData class not fully initialised")
         return self._gui
 
     @property
     def theme(self) -> GuiTheme:
         """Return the GUI Theme instance."""
         if self._theme is None:
-            raise Exception("SharedData class not fully initialised")
+            raise RuntimeError("SharedData class not fully initialised")
         return self._theme
 
     @property
     def project(self) -> NWProject:
         """Return the active NWProject instance."""
         if self._project is None:
-            raise Exception("SharedData class not fully initialised")
+            raise RuntimeError("SharedData class not fully initialised")
         return self._project
 
     @property
     def spelling(self) -> NWSpellEnchant:
         """Return the active NWProject instance."""
         if self._spelling is None:
-            raise Exception("SharedData class not fully initialised")
+            raise RuntimeError("SharedData class not fully initialised")
         return self._spelling
 
     @property
@@ -479,7 +480,7 @@ class _GuiAlert(QMessageBox):
     def setException(self, exception: Exception) -> None:
         """Add exception details."""
         info = self.informativeText()
-        text = f"<b>{type(exception).__name__}</b>: {str(exception)}"
+        text = f"<b>{type(exception).__name__}</b>: {exception!s}"
         self.setInformativeText(f"{info}<br>{text}" if info else text)
         return
 

@@ -21,7 +21,6 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 from __future__ import annotations
 
 import shutil
-import sys
 
 from pathlib import Path
 from shutil import copyfile
@@ -30,7 +29,7 @@ import pytest
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QPalette
-from PyQt6.QtWidgets import QInputDialog, QMenu, QMessageBox
+from PyQt6.QtWidgets import QInputDialog, QMessageBox
 
 from novelwriter import CONFIG, SHARED
 from novelwriter.constants import nwFiles
@@ -117,7 +116,8 @@ def testGuiMain_Launch(qtbot, monkeypatch, nwGUI, projPath):
     # Check that project open dialog launches
     nwGUI.postLaunchTasks(None)
     qtbot.waitUntil(lambda: SHARED.findTopLevelWidget(GuiWelcome) is not None, timeout=1000)
-    assert isinstance(welcome := SHARED.findTopLevelWidget(GuiWelcome), GuiWelcome)
+    welcome = SHARED.findTopLevelWidget(GuiWelcome)
+    assert isinstance(welcome, GuiWelcome)
     welcome.show()
     welcome.close()
 
@@ -151,12 +151,12 @@ def testGuiMain_ProjectTreeItems(qtbot, monkeypatch, nwGUI, projPath, mockRnd):
 
     # Novel Tree has focus
     nwGUI._changeView(nwView.NOVEL)
-    nwGUI.novelView.novelTree.refreshTree(rootHandle=None, overRide=True)
     with monkeypatch.context() as mp:
         mp.setattr(GuiNovelView, "treeHasFocus", lambda *a: True)
         assert nwGUI.docEditor.docHandle is None
-        selItem = nwGUI.novelView.novelTree.topLevelItem(2)
-        nwGUI.novelView.novelTree.setCurrentItem(selItem)
+        model = nwGUI.novelView.novelTree._getModel()
+        assert model is not None
+        nwGUI.novelView.novelTree.setCurrentIndex(model.createIndex(2, 0))
         nwGUI._keyPressReturn()
         assert nwGUI.docEditor.docHandle == sHandle
         nwGUI.closeDocument()
@@ -184,6 +184,7 @@ def testGuiMain_UpdateTheme(qtbot, nwGUI):
     CONFIG.guiSyntax = "default_dark"
     mainTheme.loadTheme()
     mainTheme.loadSyntax()
+    nwGUI._processConfigChanges(False, True, False, False)
     nwGUI._processConfigChanges(True, True, True, True)
 
     syntax = SHARED.theme.syntaxTheme
@@ -455,7 +456,7 @@ def testGuiMain_Editing(qtbot, monkeypatch, nwGUI, projPath, tstPaths, mockRnd):
     # Dialogue
     # ========
 
-    for c in "\"Full line double quoted text.\"":
+    for c in '"Full line double quoted text."':
         qtbot.keyClick(docEditor, c, delay=KEY_DELAY)
     qtbot.keyClick(docEditor, Qt.Key.Key_Return, delay=KEY_DELAY)
     qtbot.keyClick(docEditor, Qt.Key.Key_Return, delay=KEY_DELAY)
@@ -470,7 +471,7 @@ def testGuiMain_Editing(qtbot, monkeypatch, nwGUI, projPath, tstPaths, mockRnd):
     CONFIG.fmtPadAfter = "\u201c"
     docEditor.initEditor()
 
-    for c in "Some \"double quoted text with spaces padded\".":
+    for c in 'Some "double quoted text with spaces padded".':
         qtbot.keyClick(docEditor, c, delay=KEY_DELAY)
     qtbot.keyClick(docEditor, Qt.Key.Key_Return, delay=KEY_DELAY)
     qtbot.keyClick(docEditor, Qt.Key.Key_Return, delay=KEY_DELAY)
@@ -534,17 +535,17 @@ def testGuiMain_Editing(qtbot, monkeypatch, nwGUI, projPath, tstPaths, mockRnd):
     # ================
 
     nwGUI._switchFocus(nwView.EDITOR)
-    for c in "\t\"Tab-indented text\"":
+    for c in '\t"Tab-indented text"':
         qtbot.keyClick(docEditor, c, delay=KEY_DELAY)
     qtbot.keyClick(docEditor, Qt.Key.Key_Return, delay=KEY_DELAY)
     qtbot.keyClick(docEditor, Qt.Key.Key_Return, delay=KEY_DELAY)
 
-    for c in ">\"Paragraph-indented text\"":
+    for c in '>"Paragraph-indented text"':
         qtbot.keyClick(docEditor, c, delay=KEY_DELAY)
     qtbot.keyClick(docEditor, Qt.Key.Key_Return, delay=KEY_DELAY)
     qtbot.keyClick(docEditor, Qt.Key.Key_Return, delay=KEY_DELAY)
 
-    for c in ">>\"Right-aligned text\"":
+    for c in '>>"Right-aligned text"':
         qtbot.keyClick(docEditor, c, delay=KEY_DELAY)
     qtbot.keyClick(docEditor, Qt.Key.Key_Return, delay=KEY_DELAY)
     qtbot.keyClick(docEditor, Qt.Key.Key_Return, delay=KEY_DELAY)
@@ -565,32 +566,6 @@ def testGuiMain_Editing(qtbot, monkeypatch, nwGUI, projPath, tstPaths, mockRnd):
     qtbot.keyClick(docEditor, Qt.Key.Key_Return, delay=KEY_DELAY)
 
     docEditor._wCounterDoc.run()
-
-    # Spell Checking
-    # ==============
-
-    for c in "Some text with tesst in it.":
-        qtbot.keyClick(docEditor, c, delay=KEY_DELAY)
-    qtbot.keyClick(docEditor, Qt.Key.Key_Return, delay=KEY_DELAY)
-    qtbot.keyClick(docEditor, Qt.Key.Key_Return, delay=KEY_DELAY)
-
-    currPos = docEditor.getCursorPosition()
-    assert docEditor._qDocument.spellErrorAtPos(currPos) == ("", -1, -1, [])
-
-    errPos = currPos - 13
-    if not sys.platform.startswith("win32"):
-        # Skip on Windows as spell checking is off there
-        # This check will fail without an 'en' dictionary, like aspell-en
-        word, cPos, cLen, suggest = docEditor._qDocument.spellErrorAtPos(errPos)
-        assert word == "tesst"
-        assert cPos == 15
-        assert cLen == 5
-        assert "test" in suggest
-
-    with monkeypatch.context() as mp:
-        mp.setattr(QMenu, "exec", lambda *a: None)
-        docEditor.setCursorPosition(errPos)
-        docEditor._openContextFromCursor()
 
     # Check Files
     # ===========

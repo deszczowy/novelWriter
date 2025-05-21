@@ -27,7 +27,7 @@ from __future__ import annotations
 import logging
 
 from math import ceil
-from pathlib import Path
+from typing import TYPE_CHECKING, Final
 
 from PyQt6.QtCore import QSize, Qt
 from PyQt6.QtGui import (
@@ -43,6 +43,9 @@ from novelwriter.constants import nwLabels
 from novelwriter.enum import nwItemClass, nwItemLayout, nwItemType
 from novelwriter.error import logException
 from novelwriter.types import QtBlack, QtHexArgb, QtPaintAntiAlias, QtTransparent
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -93,18 +96,13 @@ class GuiTheme:
     """
 
     __slots__ = (
-        # Attributes
-        "iconCache", "themeMeta", "isDarkTheme", "helpText", "fadedText", "errorText",
-        "syntaxMeta", "syntaxTheme", "guiFont", "guiFontB", "guiFontBU", "guiFontSmall",
-        "fontPointSize", "fontPixelSize", "baseIconHeight", "baseButtonHeight", "textNHeight",
-        "textNWidth", "baseIconSize", "buttonIconSize", "guiFontFixed",
-
-        # Functions
-        "getIcon", "getPixmap", "getItemIcon", "getIconColor", "getToggleIcon", "getDecoration",
-        "getHeaderDecoration", "getHeaderDecorationNarrow",
-
-        # Internal
-        "_guiPalette", "_themeList", "_syntaxList", "_availThemes", "_availSyntax", "_styleSheets",
+        "_availSyntax", "_availThemes", "_guiPalette", "_styleSheets", "_syntaxList", "_themeList",
+        "baseButtonHeight", "baseIconHeight", "baseIconSize", "buttonIconSize", "errorText",
+        "fadedText", "fontPixelSize", "fontPointSize", "getDecoration", "getHeaderDecoration",
+        "getHeaderDecorationNarrow", "getIcon", "getIconColor", "getItemIcon", "getPixmap",
+        "getToggleIcon", "guiFont", "guiFontB", "guiFontBU", "guiFontFixed", "guiFontSmall",
+        "helpText", "iconCache", "isDarkTheme", "syntaxMeta", "syntaxTheme", "textNHeight",
+        "textNWidth", "themeMeta",
     )
 
     def __init__(self) -> None:
@@ -132,14 +130,6 @@ class GuiTheme:
         self._availSyntax: dict[str, Path] = {}
         self._styleSheets: dict[str, str] = {}
 
-        _listConf(self._availSyntax, CONFIG.assetPath("syntax"), ".conf")
-        _listConf(self._availThemes, CONFIG.assetPath("themes"), ".conf")
-        _listConf(self._availSyntax, CONFIG.dataPath("syntax"), ".conf")
-        _listConf(self._availThemes, CONFIG.dataPath("themes"), ".conf")
-
-        self.loadTheme()
-        self.loadSyntax()
-
         # Icon Functions
         self.getIcon = self.iconCache.getIcon
         self.getPixmap = self.iconCache.getPixmap
@@ -164,9 +154,9 @@ class GuiTheme:
         fHeight = qMetric.height()
         fAscent = qMetric.ascent()
         self.fontPointSize = self.guiFont.pointSizeF()
-        self.fontPixelSize = int(round(fHeight))
-        self.baseIconHeight = int(round(fAscent))
-        self.baseButtonHeight = int(round(1.35*fAscent))
+        self.fontPixelSize = round(fHeight)
+        self.baseIconHeight = round(fAscent)
+        self.baseButtonHeight = round(1.35*fAscent)
         self.textNHeight = qMetric.boundingRect("N").height()
         self.textNWidth = qMetric.boundingRect("N").width()
 
@@ -188,6 +178,15 @@ class GuiTheme:
         logger.debug("Text 'N' Height: %d", self.textNHeight)
         logger.debug("Text 'N' Width: %d", self.textNWidth)
 
+        # Process Themes
+        _listConf(self._availSyntax, CONFIG.assetPath("syntax"), ".conf")
+        _listConf(self._availThemes, CONFIG.assetPath("themes"), ".conf")
+        _listConf(self._availSyntax, CONFIG.dataPath("syntax"), ".conf")
+        _listConf(self._availThemes, CONFIG.dataPath("themes"), ".conf")
+
+        self.loadTheme()
+        self.loadSyntax()
+
         return
 
     ##
@@ -202,7 +201,7 @@ class GuiTheme:
             qMetrics = QFontMetrics(font)
         else:
             qMetrics = QFontMetrics(self.guiFont)
-        return int(ceil(qMetrics.boundingRect(text).width()))
+        return ceil(qMetrics.boundingRect(text).width())
 
     ##
     #  Theme Methods
@@ -220,6 +219,7 @@ class GuiTheme:
             logger.error("Could not load GUI theme")
             return False
 
+        CONFIG.splashMessage("Loading GUI theme ...")
         logger.info("Loading GUI theme '%s'", theme)
         parser = NWConfigParser()
         try:
@@ -359,6 +359,8 @@ class GuiTheme:
         QApplication.setPalette(self._guiPalette)
         self._buildStyleSheets(self._guiPalette)
 
+        CONFIG.splashMessage(f"Loaded GUI theme: {meta.name}")
+
         return True
 
     def loadSyntax(self) -> bool:
@@ -373,6 +375,7 @@ class GuiTheme:
             logger.error("Could not load syntax theme")
             return False
 
+        CONFIG.splashMessage("Loading syntax theme ...")
         logger.info("Loading syntax theme '%s'", theme)
         parser = NWConfigParser()
         try:
@@ -419,6 +422,8 @@ class GuiTheme:
             syntax.repTag = self._parseColor(parser, sec, "replacetag")
             syntax.mod    = self._parseColor(parser, sec, "modifier")
             syntax.mark   = self._parseColor(parser, sec, "texthighlight")
+
+        CONFIG.splashMessage(f"Loaded syntax theme: {meta.name}")
 
         self.syntaxMeta = meta
         self.syntaxTheme = syntax
@@ -567,16 +572,16 @@ class GuiIcons:
     """
 
     __slots__ = (
-        "mainTheme", "themeMeta", "_svgData", "_svgColors", "_qColors",
-        "_qIcons", "_headerDec", "_headerDecNarrow", "_availThemes",
-        "_themeList", "_noIcon",
+        "_availThemes", "_headerDec", "_headerDecNarrow", "_noIcon",
+        "_qColors", "_qIcons", "_svgColors", "_svgData", "_themeList",
+        "mainTheme", "themeMeta",
     )
 
-    TOGGLE_ICON_KEYS: dict[str, tuple[str, str]] = {
+    TOGGLE_ICON_KEYS: Final[dict[str, tuple[str, str]]] = {
         "bullet": ("bullet-on", "bullet-off"),
         "unfold": ("unfold-show", "unfold-hide"),
     }
-    IMAGE_MAP: dict[str, tuple[str, str]] = {
+    IMAGE_MAP: Final[dict[str, tuple[str, str]]] = {
         "welcome":  ("welcome-light.jpg", "welcome-dark.jpg"),
         "nw-text":  ("novelwriter-text-light.svg", "novelwriter-text-dark.svg"),
     }
@@ -635,6 +640,7 @@ class GuiIcons:
             logger.error("Could not load icon theme")
             return False
 
+        CONFIG.splashMessage("Loading icon theme ...")
         logger.info("Loading icon theme '%s'", theme)
         try:
             meta = ThemeMeta()
@@ -658,6 +664,9 @@ class GuiIcons:
             logException()
             return False
 
+        CONFIG.splashMessage(f"Loaded icon theme: {meta.name}")
+        CONFIG.splashMessage("Generating additional icons ...")
+
         # Set colour overrides for project item icons
         if (override := CONFIG.iconColTree) != "theme":
             color = self._svgColors.get(override, b"#000000")
@@ -669,6 +678,10 @@ class GuiIcons:
                 self._svgColors["chapter"] = color
                 self._svgColors["scene"] = color
                 self._svgColors["note"] = color
+
+        # Populate generated icons cache
+        self.getHeaderDecoration(0)
+        self.getHeaderDecorationNarrow(0)
 
         return True
 
@@ -694,7 +707,7 @@ class GuiIcons:
         else:
             icon = self._loadIcon(name, color, w, h)
             self._qIcons[key] = icon
-            logger.info("Icon: %s", key)
+            logger.debug("Icon: %s", key)
             return icon
 
     def getToggleIcon(self, name: str, size: tuple[int, int], color: str | None = None) -> QIcon:
@@ -824,8 +837,8 @@ class GuiIcons:
     ##
 
     def _loadIcon(self, name: str, color: str | None = None, w: int = 24, h: int = 24) -> QIcon:
-        """Load an icon from the assets themes folder. Is guaranteed to
-        return a QIcon.
+        """Load an icon from the assets themes folder. This function is
+        guaranteed to return a QIcon.
         """
         # If we just want the app icons, return right away
         if name == "novelwriter":

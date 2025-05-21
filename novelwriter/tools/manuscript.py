@@ -59,7 +59,7 @@ from novelwriter.types import (
     QtUserRole
 )
 
-if TYPE_CHECKING:  # pragma: no cover
+if TYPE_CHECKING:
     from novelwriter.guimain import GuiMain
 
 logger = logging.getLogger(__name__)
@@ -333,7 +333,7 @@ class GuiManuscript(NToolDialog):
     def _deleteSelectedBuild(self) -> None:
         """Delete the currently selected build settings entry."""
         if build := self._getSelectedBuild():
-            if SHARED.question(self.tr("Delete build '{0}'?".format(build.name))):
+            if SHARED.question(self.tr("Delete build '{0}'?").format(build.name)):
                 if dialog := self._findSettingsDialog(build.buildID):
                     dialog.close()
                 self._builds.removeBuild(build.buildID)
@@ -427,10 +427,10 @@ class GuiManuscript(NToolDialog):
 
     def _saveSettings(self) -> None:
         """Save the user GUI settings."""
-        buildOrder = []
-        for i in range(self.buildList.count()):
-            if item := self.buildList.item(i):
-                buildOrder.append(item.data(self.D_KEY))
+        buildOrder = [
+            item.data(self.D_KEY) for i in range(self.buildList.count())
+            if (item := self.buildList.item(i))
+        ]
 
         current = self.buildList.currentItem()
         lastBuild = current.data(self.D_KEY) if isinstance(current, QListWidgetItem) else ""
@@ -629,8 +629,8 @@ class _DetailsWidget(QWidget):
         item.setText(1, "")
         self.listView.addTopLevelItem(item)
         for key in [
-            "text.includeSynopsis", "text.includeComments",
-            "text.includeKeywords", "text.includeBodyText",
+            "text.includeSynopsis", "text.includeComments", "text.includeStory",
+            "text.includeNotes", "text.includeKeywords", "text.includeBodyText",
         ]:
             sub = QTreeWidgetItem()
             sub.setText(0, build.getLabel(key))
@@ -681,9 +681,9 @@ class _OutlineWidget(QWidget):
             hFont.setBold(True)
             hFont.setUnderline(True)
 
+            indent = False
             if root := self.listView.invisibleRootItem():
                 parent = root
-                indent = False
                 for anchor, entry in data.items():
                     prefix, _, text = entry.partition("|")
                     if prefix in ("TT", "PT", "CH", "SC", "H1", "H2"):
@@ -744,7 +744,7 @@ class _PreviewWidget(QTextBrowser):
             document.setDocumentMargin(CONFIG.textMargin)
 
         self.setPlaceholderText(self.tr(
-            "Press the \"Preview\" button to generate ..."
+            'Press the "Preview" button to generate ...'
         ))
 
         self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOn)
@@ -977,23 +977,23 @@ class _StatsWidget(QWidget):
     def updateStats(self, data: dict[str, int]) -> None:
         """Update the stats values from a Tokenizer stats dict."""
         # Minimal
-        self.minWordCount.setText("{0:n}".format(data.get(nwStats.WORDS, 0)))
-        self.minCharCount.setText("{0:n}".format(data.get(nwStats.CHARS, 0)))
+        self.minWordCount.setText(f"{data.get(nwStats.WORDS, 0):n}")
+        self.minCharCount.setText(f"{data.get(nwStats.CHARS, 0):n}")
 
         # Maximal
-        self.maxTotalWords.setText("{0:n}".format(data.get(nwStats.WORDS, 0)))
-        self.maxHeadWords.setText("{0:n}".format(data.get(nwStats.WORDS_TITLE, 0)))
-        self.maxTextWords.setText("{0:n}".format(data.get(nwStats.WORDS_TEXT, 0)))
-        self.maxTitleCount.setText("{0:n}".format(data.get(nwStats.TITLES, 0)))
-        self.maxParCount.setText("{0:n}".format(data.get(nwStats.PARAGRAPHS, 0)))
+        self.maxTotalWords.setText(f"{data.get(nwStats.WORDS, 0):n}")
+        self.maxHeadWords.setText(f"{data.get(nwStats.WORDS_TITLE, 0):n}")
+        self.maxTextWords.setText(f"{data.get(nwStats.WORDS_TEXT, 0):n}")
+        self.maxTitleCount.setText(f"{data.get(nwStats.TITLES, 0):n}")
+        self.maxParCount.setText(f"{data.get(nwStats.PARAGRAPHS, 0):n}")
 
-        self.maxTotalChars.setText("{0:n}".format(data.get(nwStats.CHARS, 0)))
-        self.maxHeaderChars.setText("{0:n}".format(data.get(nwStats.CHARS_TITLE, 0)))
-        self.maxTextChars.setText("{0:n}".format(data.get(nwStats.CHARS_TEXT, 0)))
+        self.maxTotalChars.setText(f"{data.get(nwStats.CHARS, 0):n}")
+        self.maxHeaderChars.setText(f"{data.get(nwStats.CHARS_TITLE, 0):n}")
+        self.maxTextChars.setText(f"{data.get(nwStats.CHARS_TEXT, 0):n}")
 
-        self.maxTotalWordChars.setText("{0:n}".format(data.get(nwStats.WCHARS_ALL, 0)))
-        self.maxHeadWordChars.setText("{0:n}".format(data.get(nwStats.WCHARS_TITLE, 0)))
-        self.maxTextWordChars.setText("{0:n}".format(data.get(nwStats.WCHARS_TEXT, 0)))
+        self.maxTotalWordChars.setText(f"{data.get(nwStats.WCHARS_ALL, 0):n}")
+        self.maxHeadWordChars.setText(f"{data.get(nwStats.WCHARS_TITLE, 0):n}")
+        self.maxTextWordChars.setText(f"{data.get(nwStats.WCHARS_TEXT, 0):n}")
 
         return
 

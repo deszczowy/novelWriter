@@ -73,8 +73,9 @@ class GuiDocMerge(NDialog):
         self.listBox.setDragDropMode(QAbstractItemView.DragDropMode.InternalMove)
 
         # Merge Options
-        self.trashLabel = QLabel(self.tr("Move merged items to Trash"), self)
         self.trashSwitch = NSwitch(self, height=iPx)
+        self.trashLabel = QLabel(self.tr("Move merged items to Trash"), self)
+        self.trashLabel.setBuddy(self.trashSwitch)
 
         self.optBox = QGridLayout()
         self.optBox.addWidget(self.trashLabel,  0, 0)
@@ -131,11 +132,11 @@ class GuiDocMerge(NDialog):
     @classmethod
     def getData(cls, parent: QWidget, handle: str, items: list[str]) -> tuple[dict, bool]:
         """Pop the dialog and return the result."""
-        cls = GuiDocMerge(parent, handle, items)
-        cls.exec()
-        data = cls.data()
-        accepted = cls.result() == QtAccepted
-        cls.softDelete()
+        dialog = cls(parent, handle, items)
+        dialog.exec()
+        data = dialog.data()
+        accepted = dialog.result() == QtAccepted
+        dialog.softDelete()
         return data, accepted
 
     ##
@@ -146,9 +147,9 @@ class GuiDocMerge(NDialog):
     def _resetList(self) -> None:
         """Reset the content of the list box to its original state."""
         logger.debug("Resetting list box content")
-        sHandle = self._data.get("sHandle", None)
-        itemList = self._data.get("origItems", [])
-        self._loadContent(sHandle, itemList)
+        if sHandle := self._data.get("sHandle"):
+            itemList = self._data.get("origItems", [])
+            self._loadContent(sHandle, itemList)
         return
 
     ##

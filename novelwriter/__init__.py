@@ -35,8 +35,9 @@ from PyQt6.QtWidgets import QApplication, QErrorMessage
 from novelwriter.config import Config
 from novelwriter.error import exceptionHandler
 from novelwriter.shared import SharedData
+from novelwriter.splash import NSplashScreen
 
-if TYPE_CHECKING:  # pragma: no cover
+if TYPE_CHECKING:
     from novelwriter.guimain import GuiMain
 
 # Package Meta
@@ -48,9 +49,9 @@ __license__    = "GPLv3"
 __author__     = "Veronica Berglyd Olsen"
 __maintainer__ = "Veronica Berglyd Olsen"
 __email__      = "code@vkbo.net"
-__version__    = "2.7a3"
-__hexversion__ = "0x020700a3"
-__date__       = "2025-02-04"
+__version__    = "2.7rc1"
+__hexversion__ = "0x020700c1"
+__date__       = "2025-05-19"
 __status__     = "Stable"
 __domain__     = "novelwriter.io"
 
@@ -148,7 +149,7 @@ def main(sysArgs: list | None = None) -> GuiMain | None:
         inOpts, inRemain = getopt.getopt(sysArgs, shortOpt, longOpt)
     except getopt.GetoptError as exc:
         print(helpMsg)
-        print(f"ERROR: {str(exc)}")
+        print(f"ERROR: {exc!s}")
         sys.exit(2)
 
     if len(inRemain) > 0:
@@ -159,7 +160,7 @@ def main(sysArgs: list | None = None) -> GuiMain | None:
             print(helpMsg)
             sys.exit(0)
         elif inOpt in ("-v", "--version"):
-            print("novelWriter Version %s [%s]" % (__version__, __date__))
+            print(f"novelWriter Version {__version__} [{__date__}]")
             sys.exit(0)
         elif inOpt in ("-i", "--info"):
             logLevel = logging.INFO
@@ -207,17 +208,17 @@ def main(sysArgs: list | None = None) -> GuiMain | None:
     errorCode = 0
     if sys.hexversion < 0x030a00f0:
         errorData.append(
-            "At least Python 3.10 is required, found %s" % CONFIG.verPyString
+            f"At least Python 3.10 is required, found {CONFIG.verPyString}"
         )
         errorCode |= 0x04
     if CONFIG.verQtValue < 0x060400:
         errorData.append(
-            "At least Qt6 version 6.4 is required, found %s" % CONFIG.verQtString
+            f"At least Qt6 version 6.4 is required, found {CONFIG.verQtString}"
         )
         errorCode |= 0x08
     if CONFIG.verPyQtValue < 0x060400:
         errorData.append(
-            "At least PyQt6 version 6.4 is required, found %s" % CONFIG.verPyQtString
+            f"At least PyQt6 version 6.4 is required, found {CONFIG.verPyQtString}"
         )
         errorCode |= 0x10
 
@@ -228,9 +229,9 @@ def main(sysArgs: list | None = None) -> GuiMain | None:
         errDlg.showMessage((
             "<h3>A critical error was encountered</h3>"
             "<p>novelWriter cannot start due to the following issues:<p>"
-            "<p>&nbsp;-&nbsp;%s</p>"
+            "<p>&nbsp;-&nbsp;{0}</p>"
             "<p>Shutting down ...</p>"
-        ) % (
+        ).format(
             "<br>&nbsp;-&nbsp;".join(errorData)
         ))
         for errLine in errorData:
@@ -267,13 +268,25 @@ def main(sysArgs: list | None = None) -> GuiMain | None:
     # Connect the exception handler before making the main GUI
     sys.excepthook = exceptionHandler
 
+    splash = NSplashScreen()
+    splash.show()
+
+    splash.showStatus("")
+    splash.showStatus("Starting novelWriter ...")
+
     # Run Config steps that require the QApplication
-    CONFIG.loadConfig()
+    CONFIG.loadConfig(splash)
     CONFIG.initLocalisation(app)
     SHARED.initTheme(GuiTheme())
 
     # Launch main GUI
     nwGUI = GuiMain()
+    nwGUI.showNormal()
+    splash.finish(nwGUI)
+
+    CONFIG.finishStartup()
+    del splash
+
     nwGUI.postLaunchTasks(cmdOpen)
 
     sys.exit(app.exec())
@@ -283,7 +296,7 @@ def _createApp(style: str) -> QApplication:
     """Create the app. This is done in a function to make it easier to
     block app creation during testing.
     """
-    app = QApplication([CONFIG.appName, (f"-style={style}")])
+    app = QApplication([CONFIG.appName, f"-style={style}"])
     app.setApplicationName(CONFIG.appName)
     app.setApplicationVersion(__version__)
     app.setOrganizationDomain(__domain__)

@@ -24,9 +24,13 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 """
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from PyQt6.QtCore import QEvent, QObject
 from PyQt6.QtGui import QStatusTipEvent, QWheelEvent
-from PyQt6.QtWidgets import QWidget
+
+if TYPE_CHECKING:
+    from PyQt6.QtWidgets import QWidget
 
 
 class WheelEventFilter(QObject):
@@ -40,7 +44,7 @@ class WheelEventFilter(QObject):
     Reference: https://stackoverflow.com/a/17739995/5825851
     """
 
-    __slots__ = ("_parent", "_locked")
+    __slots__ = ("_locked", "_parent")
 
     def __init__(self, parent: QWidget) -> None:
         super().__init__(parent=parent)
@@ -48,7 +52,7 @@ class WheelEventFilter(QObject):
         self._locked = False
         return
 
-    def eventFilter(self, object: QObject, event: QEvent) -> bool:
+    def eventFilter(self, obj: QObject, event: QEvent) -> bool:
         """Filter events of type QWheelEvent and forward them to the
         parent widget's wheelEvent handler.
         """

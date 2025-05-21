@@ -12,7 +12,7 @@ import time
 # -- Project Information -----------------------------------------------------
 
 project = "novelWriter"
-copyright = f"{datetime.date.today().year}"
+copyright = f"{datetime.date.today().year}"  # noqa: A001
 
 tmp_authors = ["Veronica Berglyd Olsen"]
 if additional := os.environ.get("SPHINX_I18N_AUTHORS"):
@@ -24,7 +24,7 @@ initFile = os.path.join(
     os.path.dirname(__file__), os.pardir, os.pardir,
     "novelwriter", "__init__.py"
 )
-with open(initFile) as inFile:
+with open(initFile, encoding="utf-8") as inFile:
     for aLine in inFile:
         if aLine.startswith("__version__"):
             release = aLine.split('"')[1].strip()

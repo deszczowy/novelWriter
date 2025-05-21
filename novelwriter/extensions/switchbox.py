@@ -23,8 +23,9 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 """
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from PyQt6.QtCore import pyqtSignal
-from PyQt6.QtGui import QIcon
 from PyQt6.QtWidgets import QGridLayout, QLabel, QScrollArea, QWidget
 
 from novelwriter.extensions.switch import NSwitch
@@ -32,6 +33,9 @@ from novelwriter.types import (
     QtAlignLeft, QtAlignRight, QtAlignRightMiddle, QtSizeMinimum,
     QtSizeMinimumExpanding
 )
+
+if TYPE_CHECKING:
+    from PyQt6.QtGui import QIcon
 
 
 class NSwitchBox(QScrollArea):
@@ -96,6 +100,7 @@ class NSwitchBox(QScrollArea):
         switch.toggled.connect(lambda state: self._emitSwitchSignal(identifier, state))
         self._content.addWidget(switch, self._index, 2, QtAlignRight)
 
+        label.setBuddy(switch)
         self._widgets.append(switch)
         self._bumpIndex()
 

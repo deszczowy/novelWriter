@@ -90,16 +90,19 @@ class GuiDocSplit(NDialog):
         self.splitLevel.currentIndexChanged.connect(self._reloadList)
 
         # Split Options
-        self.folderLabel = QLabel(self.tr("Split into a new folder"), self)
         self.folderSwitch = NSwitch(self, height=iPx)
         self.folderSwitch.setChecked(intoFolder)
+        self.folderLabel = QLabel(self.tr("Split into a new folder"), self)
+        self.folderLabel.setBuddy(self.folderSwitch)
 
-        self.hierarchyLabel = QLabel(self.tr("Create document hierarchy"), self)
         self.hierarchySwitch = NSwitch(self, height=iPx)
         self.hierarchySwitch.setChecked(docHierarchy)
+        self.hierarchyLabel = QLabel(self.tr("Create document hierarchy"), self)
+        self.hierarchyLabel.setBuddy(self.hierarchySwitch)
 
-        self.trashLabel = QLabel(self.tr("Move split document to Trash"), self)
         self.trashSwitch = NSwitch(self, height=iPx)
+        self.trashLabel = QLabel(self.tr("Move split document to Trash"), self)
+        self.trashLabel.setBuddy(self.trashSwitch)
 
         self.optBox = QGridLayout()
         self.optBox.addWidget(self.folderLabel,  0, 0)
@@ -178,11 +181,11 @@ class GuiDocSplit(NDialog):
     @classmethod
     def getData(cls, parent: QWidget, handle: str) -> tuple[dict, list[str], bool]:
         """Pop the dialog and return the result."""
-        cls = GuiDocSplit(parent, handle)
-        cls.exec()
-        data, text = cls.data()
-        accepted = cls.result() == QtAccepted
-        cls.softDelete()
+        dialog = cls(parent, handle)
+        dialog.exec()
+        data, text = dialog.data()
+        accepted = dialog.result() == QtAccepted
+        dialog.softDelete()
         return data, text, accepted
 
     ##
@@ -192,8 +195,8 @@ class GuiDocSplit(NDialog):
     @pyqtSlot()
     def _reloadList(self) -> None:
         """Reload the content of the list box."""
-        sHandle = self._data.get("sHandle", None)
-        self._loadContent(sHandle)
+        if sHandle := self._data.get("sHandle"):
+            self._loadContent(sHandle)
         return
 
     ##

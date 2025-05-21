@@ -26,8 +26,9 @@ from __future__ import annotations
 import logging
 import math
 
+from typing import TYPE_CHECKING
+
 from PyQt6.QtCore import pyqtSlot
-from PyQt6.QtGui import QCloseEvent
 from PyQt6.QtWidgets import (
     QAbstractItemView, QDialogButtonBox, QFormLayout, QGridLayout, QHBoxLayout,
     QLabel, QSpinBox, QStackedWidget, QTreeWidget, QTreeWidgetItem,
@@ -43,6 +44,9 @@ from novelwriter.extensions.novelselector import NovelSelector
 from novelwriter.extensions.pagedsidebar import NPagedSideBar
 from novelwriter.extensions.switch import NSwitch
 from novelwriter.types import QtAlignRight, QtDecoration, QtDialogClose
+
+if TYPE_CHECKING:
+    from PyQt6.QtGui import QCloseEvent
 
 logger = logging.getLogger(__name__)
 
@@ -82,6 +86,7 @@ class GuiNovelDetails(NNonBlockingDialog):
         # SideBar
         self.sidebar = NPagedSideBar(self)
         self.sidebar.setLabelColor(SHARED.theme.helpText)
+        self.sidebar.setAccessibleName(self.titleLabel.text())
         self.sidebar.addButton(self.tr("Overview"), self.PAGE_OVERVIEW)
         self.sidebar.addButton(self.tr("Contents"), self.PAGE_CONTENTS)
         self.sidebar.setSelected(self.PAGE_OVERVIEW)
@@ -137,9 +142,10 @@ class GuiNovelDetails(NNonBlockingDialog):
 
     def updateValues(self) -> None:
         """Load the dialogs initial values."""
-        self.overviewPage.updateProjectData()
-        self.overviewPage.novelValueChanged(self.novelSelector.handle)
-        self.contentsPage.novelValueChanged(self.novelSelector.handle)
+        if handle := self.novelSelector.handle:
+            self.overviewPage.updateProjectData()
+            self.overviewPage.novelValueChanged(handle)
+            self.contentsPage.novelValueChanged(handle)
         return
 
     ##
@@ -251,8 +257,8 @@ class _OverviewPage(NScrollablePage):
     def updateProjectData(self) -> None:
         """Load information about the project."""
         project = SHARED.project
-        project.updateWordCounts()
-        wcNovel, wcNotes = project.data.currCounts
+        project.updateCounts()
+        wcNovel, wcNotes, _, _ = project.data.currCounts
 
         self.projName.setText(project.data.name)
         self.projRevisions.setText(f"{project.data.saveCount:n}")
@@ -351,16 +357,14 @@ class _ContentsPage(NFixedPage):
         countFrom    = options.getInt("GuiNovelDetails", "countFrom", 1)
         clearDouble  = options.getBool("GuiNovelDetails", "clearDouble", True)
 
-        self.wpLabel = QLabel(self.tr("Words per page"), self)
-
         self.wpValue = QSpinBox(self)
         self.wpValue.setMinimum(10)
         self.wpValue.setMaximum(1000)
         self.wpValue.setSingleStep(10)
         self.wpValue.setValue(wordsPerPage)
         self.wpValue.valueChanged.connect(self._populateTree)
-
-        self.poLabel = QLabel(self.tr("First page offset"), self)
+        self.wpLabel = QLabel(self.tr("Words per page"), self)
+        self.wpLabel.setBuddy(self.wpValue)
 
         self.poValue = QSpinBox(self)
         self.poValue.setMinimum(1)
@@ -368,12 +372,14 @@ class _ContentsPage(NFixedPage):
         self.poValue.setSingleStep(1)
         self.poValue.setValue(countFrom)
         self.poValue.valueChanged.connect(self._populateTree)
-
-        self.dblLabel = QLabel(self.tr("Chapters on odd pages"), self)
+        self.poLabel = QLabel(self.tr("First page offset"), self)
+        self.poLabel.setBuddy(self.poValue)
 
         self.dblValue = NSwitch(self, height=iPx)
         self.dblValue.setChecked(clearDouble)
         self.dblValue.clicked.connect(self._populateTree)
+        self.dblLabel = QLabel(self.tr("Chapters on odd pages"), self)
+        self.dblLabel.setBuddy(self.dblValue)
 
         self.optionsBox = QGridLayout()
         self.optionsBox.addWidget(self.wpLabel,  0, 0)

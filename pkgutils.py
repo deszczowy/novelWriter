@@ -37,6 +37,7 @@ import utils.build_appimage
 import utils.build_binary
 import utils.build_debian
 import utils.build_windows
+import utils.docs
 import utils.icon_themes
 
 from utils.common import ROOT_DIR, SETUP_DIR, extractVersion, readFile, stripVersion, writeFile
@@ -88,13 +89,13 @@ def cleanBuildDirs(args: argparse.Namespace) -> None:
     print("")
 
     folders = [
-        ROOT_DIR / "build",
         ROOT_DIR / "build_bin",
-        ROOT_DIR / "dist",
+        ROOT_DIR / "build",
+        ROOT_DIR / "dist_appimage",
         ROOT_DIR / "dist_bin",
         ROOT_DIR / "dist_deb",
-        ROOT_DIR / "dist_minimal",
-        ROOT_DIR / "dist_appimage",
+        ROOT_DIR / "dist_doc",
+        ROOT_DIR / "dist",
         ROOT_DIR / "novelWriter.egg-info",
     ]
 
@@ -102,11 +103,11 @@ def cleanBuildDirs(args: argparse.Namespace) -> None:
         if folder.is_dir():
             try:
                 shutil.rmtree(folder)
-                print("Deleted: %s" % folder)
+                print(f"Deleted: {folder}")
             except OSError:
-                print("Failed:  %s" % folder)
+                print(f"Failed:  {folder}")
         else:
-            print("Missing: %s" % folder)
+            print(f"Missing: {folder}")
 
     print("")
 
@@ -141,7 +142,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         usage="pkgutils.py [command] [--flags]",
         description=(
-            "This tool provides setup and build commands for installing or distibuting "
+            "This tool provides setup and build commands for installing or distributing "
             "novelWriter as a package on Linux, Mac and Windows, as well as developer tools "
             "for internationalisation."
         )
@@ -211,20 +212,21 @@ if __name__ == "__main__":
         )
     )
     cmdUpdateDocsPo.add_argument("lang", nargs="+")
-    cmdUpdateDocsPo.set_defaults(func=utils.assets.updateDocsTranslationSources)
+    cmdUpdateDocsPo.set_defaults(func=utils.docs.updateDocsTranslationSources)
 
-    # Build Docs i18n Files
-    cmdBuildU18nDocs = parsers.add_parser(
-        "docs-lrelease", help="Build the translated PDF manual files."
+    # Build PDF Docs
+    cmdBuildPdfDocs = parsers.add_parser(
+        "docs-pdf", help="Build the PDF manual files."
     )
-    cmdBuildU18nDocs.add_argument("lang", nargs="+")
-    cmdBuildU18nDocs.set_defaults(func=utils.assets.buildDocsTranslationAssets)
+    cmdBuildPdfDocs.add_argument("lang", nargs="+")
+    cmdBuildPdfDocs.set_defaults(func=utils.docs.buildPdfDocAssets)
 
-    # Build Manual
-    cmdBuildManual = parsers.add_parser(
-        "manual", help="Build the help documentation as a PDF (requires LaTeX)."
+    # Build HTML Docs
+    cmdBuildHtmlDocs = parsers.add_parser(
+        "docs-html", help="Build the HTML docs."
     )
-    cmdBuildManual.set_defaults(func=utils.assets.buildPdfManual)
+    cmdBuildHtmlDocs.add_argument("lang", nargs="+")
+    cmdBuildHtmlDocs.set_defaults(func=utils.docs.buildHtmlDocs)
 
     # Build Sample
     cmdBuildSample = parsers.add_parser(
@@ -234,13 +236,13 @@ if __name__ == "__main__":
 
     # Clean Assets
     cmdCleanAssets = parsers.add_parser(
-        "clean-assets", help="Delete assets built by manual, sample and qtlrelease."
+        "clean-assets", help="Delete assets built by docs-pdf, sample and qtlrelease."
     )
     cmdCleanAssets.set_defaults(func=utils.assets.cleanBuiltAssets)
 
     # Build Assets
     cmdBuildAssets = parsers.add_parser(
-        "build-assets", help="Build all assets. Includes manual, sample and qtlrelease."
+        "build-assets", help="Build all assets. Includes docs-pdf, sample and qtlrelease."
     )
     cmdBuildAssets.set_defaults(func=utils.assets.buildAllAssets)
 
@@ -273,7 +275,7 @@ if __name__ == "__main__":
     cmdBuildAppImage = parsers.add_parser(
         "build-appimage", help=(
             "Build an AppImage. "
-            "Argument --linux-tag defaults manylinux_2_28_x86_64, and --python-version to 3.11."
+            "Argument --linux-tag defaults manylinux_2_28_x86_64, and --python-version to 3.13."
         )
     )
     cmdBuildAppImage.add_argument(
@@ -286,7 +288,7 @@ if __name__ == "__main__":
         ),
     )
     cmdBuildAppImage.add_argument(
-        "--python-version", default="3.11", help="Python version (e.g. 3.11)"
+        "--python-version", default="3.13", help="Python version (e.g. 3.13)"
     )
     cmdBuildAppImage.set_defaults(func=utils.build_appimage.appImage)
 

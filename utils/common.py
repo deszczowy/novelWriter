@@ -44,17 +44,17 @@ def extractVersion(beQuiet: bool = False) -> tuple[str, str, str]:
     try:
         for aLine in initFile.read_text(encoding="utf-8").splitlines():
             if aLine.startswith("__version__"):
-                numVers = getValue((aLine))
+                numVers = getValue(aLine)
             if aLine.startswith("__hexversion__"):
-                hexVers = getValue((aLine))
+                hexVers = getValue(aLine)
             if aLine.startswith("__date__"):
-                relDate = getValue((aLine))
+                relDate = getValue(aLine)
     except Exception as exc:
-        print("Could not read file: %s" % initFile)
+        print(f"Could not read file: {initFile}")
         print(str(exc))
 
     if not beQuiet:
-        print("novelWriter version: %s (%s) at %s" % (numVers, hexVers, relDate))
+        print(f"novelWriter version: {numVers} ({hexVers}) at {relDate}")
 
     return numVers, hexVers, relDate
 
@@ -95,7 +95,7 @@ def copyPackageFiles(dst: Path, setupPy: bool = False) -> None:
     copyFiles = ["LICENSE.md", "CREDITS.md", "pyproject.toml"]
     for copyFile in copyFiles:
         shutil.copyfile(copyFile, dst / copyFile)
-        print("Copied: %s" % copyFile)
+        print(f"Copied: {copyFile}")
 
     writeFile(dst / "MANIFEST.in", (
         "include LICENSE.md\n"
@@ -137,7 +137,7 @@ def makeCheckSum(sumFile: str, cwd: Path | None = None) -> str:
             shaFile = f"{sumFile}.sha256"
         else:
             shaFile = cwd / f"{sumFile}.sha256"
-        with open(shaFile, mode="w") as fOut:
+        with open(shaFile, mode="w", encoding="utf-8") as fOut:
             subprocess.call(["shasum", "-a", "256", sumFile], stdout=fOut, cwd=cwd)
         print(f"SHA256 Sum: {shaFile}")
     except Exception as exc:

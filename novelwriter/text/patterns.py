@@ -93,7 +93,7 @@ class RegExPatterns:
             if CONFIG.dialogStyle in (1, 3):
                 qO = CONFIG.fmtSQuoteOpen.strip()[:1]
                 qC = CONFIG.fmtSQuoteClose.strip()[:1]
-                if qO == qC:
+                if qO == qC or qC in self.AMBIGUOUS:
                     rx.append(f"(?:\\B{qO}.+?{qC}\\B)")
                 else:
                     rx.append(f"(?:{qO}[^{qO}]+{qC})")
@@ -102,7 +102,7 @@ class RegExPatterns:
             if CONFIG.dialogStyle in (2, 3):
                 qO = CONFIG.fmtDQuoteOpen.strip()[:1]
                 qC = CONFIG.fmtDQuoteClose.strip()[:1]
-                if qO == qC:
+                if qO == qC or qC in self.AMBIGUOUS:
                     rx.append(f"(?:\\B{qO}.+?{qC}\\B)")
                 else:
                     rx.append(f"(?:{qO}[^{qO}]+{qC})")
@@ -128,8 +128,8 @@ REGEX_PATTERNS = RegExPatterns()
 class DialogParser:
 
     __slots__ = (
-        "_quotes", "_dialog", "_alternate", "_enabled",
-        "_narrator", "_breakD", "_breakQ", "_mode",
+        "_alternate", "_breakD", "_breakQ", "_dialog", "_enabled", "_mode",
+        "_narrator", "_quotes",
     )
 
     def __init__(self) -> None:

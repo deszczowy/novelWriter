@@ -25,25 +25,29 @@ from __future__ import annotations
 
 import logging
 
-from collections.abc import Iterable
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 from PyQt6.QtGui import QFont
 
 from novelwriter import CONFIG
 from novelwriter.constants import nwLabels
-from novelwriter.core.buildsettings import BuildSettings
 from novelwriter.core.item import NWItem
-from novelwriter.core.project import NWProject
-from novelwriter.enum import nwBuildFmt
+from novelwriter.enum import nwBuildFmt, nwComment
 from novelwriter.error import formatException, logException
 from novelwriter.formats.todocx import ToDocX
 from novelwriter.formats.tohtml import ToHtml
-from novelwriter.formats.tokenizer import Tokenizer
 from novelwriter.formats.tomarkdown import ToMarkdown
 from novelwriter.formats.toodt import ToOdt
 from novelwriter.formats.toqdoc import ToQTextDocument
 from novelwriter.formats.toraw import ToRaw
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
+    from pathlib import Path
+
+    from novelwriter.core.buildsettings import BuildSettings
+    from novelwriter.core.project import NWProject
+    from novelwriter.formats.tokenizer import Tokenizer
 
 logger = logging.getLogger(__name__)
 
@@ -56,8 +60,8 @@ class NWBuildDocument:
     """
 
     __slots__ = (
-        "_project", "_build", "_queue", "_error", "_cache", "_count",
-        "_outline",
+        "_build", "_cache", "_count", "_error", "_outline", "_project",
+        "_queue",
     )
 
     def __init__(self, project: NWProject, build: BuildSettings) -> None:
@@ -307,22 +311,25 @@ class NWBuildDocument:
         )
 
         bldObj.setBodyText(self._build.getBool("text.includeBodyText"))
-        bldObj.setSynopsis(self._build.getBool("text.includeSynopsis"))
-        bldObj.setComments(self._build.getBool("text.includeComments"))
         bldObj.setKeywords(self._build.getBool("text.includeKeywords"))
         bldObj.setIgnoredKeywords(self._build.getStr("text.ignoredKeywords"))
+        bldObj.setCommentType(nwComment.PLAIN, self._build.getBool("text.includeComments"))
+        bldObj.setCommentType(nwComment.SYNOPSIS, self._build.getBool("text.includeSynopsis"))
+        bldObj.setCommentType(nwComment.SHORT, self._build.getBool("text.includeSynopsis"))
+        bldObj.setCommentType(nwComment.STORY, self._build.getBool("text.includeStory"))
+        bldObj.setCommentType(nwComment.NOTE, self._build.getBool("text.includeNotes"))
 
         if isinstance(bldObj, ToHtml):
             bldObj.setStyles(self._build.getBool("html.addStyles"))
             bldObj.setReplaceUnicode(self._build.getBool("format.stripUnicode"))
 
-        if isinstance(bldObj, (ToOdt, ToDocX)):
+        if isinstance(bldObj, ToOdt | ToDocX):
             bldObj.setHeaderFormat(
                 self._build.getStr("doc.pageHeader"),
                 self._build.getInt("doc.pageCountOffset"),
             )
 
-        if isinstance(bldObj, (ToOdt, ToDocX, ToQTextDocument)):
+        if isinstance(bldObj, ToOdt | ToDocX | ToQTextDocument):
             scale = nwLabels.UNIT_SCALE.get(self._build.getStr("format.pageUnit"), 1.0)
             pW, pH = nwLabels.PAPER_SIZE.get(self._build.getStr("format.pageSize"), (-1.0, -1.0))
             bldObj.setPageLayout(

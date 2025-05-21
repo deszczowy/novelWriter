@@ -58,8 +58,8 @@ BLOCK_TITLE = 4
 class GuiDocHighlighter(QSyntaxHighlighter):
 
     __slots__ = (
-        "_tHandle", "_isNovel", "_isInactive", "_spellCheck", "_spellErr",
-        "_hStyles", "_minRules", "_txtRules", "_cmnRules", "_dialogParser",
+        "_cmnRules", "_dialogParser", "_hStyles", "_isInactive", "_isNovel",
+        "_minRules", "_spellCheck", "_spellErr", "_tHandle", "_txtRules",
     )
 
     def __init__(self, document: QTextDocument) -> None:
@@ -393,7 +393,7 @@ class GuiDocHighlighter(QSyntaxHighlighter):
         else:  # Text Paragraph
             self.setCurrentBlockState(BLOCK_TEXT)
             hRules = self._txtRules if self._isNovel else self._minRules
-            if self._dialogParser.enabled:
+            if self._isNovel and self._dialogParser.enabled:
                 for pos, end in self._dialogParser(text):
                     length = end - pos
                     self.setFormat(pos, length, self._hStyles["dialog"])
@@ -466,14 +466,14 @@ class GuiDocHighlighter(QSyntaxHighlighter):
 
 class TextBlockData(QTextBlockUserData):
 
-    __slots__ = ("_text", "_offset", "_metaData", "_spellErrors")
+    __slots__ = ("_metaData", "_offset", "_spellErrors", "_text")
 
     def __init__(self) -> None:
         super().__init__()
         self._text = ""
         self._offset = 0
         self._metaData: list[tuple[int, int, str, str]] = []
-        self._spellErrors: list[tuple[int, int,]] = []
+        self._spellErrors: list[tuple[int, int]] = []
         return
 
     @property
@@ -505,7 +505,7 @@ class TextBlockData(QTextBlockUserData):
                     text = f"{text[:s]}{pad}{text[e:]}"
                     self._metaData.append((s, e, res.group(0), "url"))
 
-        self._text = text
+        self._text = text.replace("\u02bc", "'")
         self._offset = offset
 
         return

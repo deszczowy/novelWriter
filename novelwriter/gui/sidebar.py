@@ -37,7 +37,7 @@ from novelwriter.extensions.eventfilters import StatusTipFilter
 from novelwriter.extensions.modified import NIconToolButton
 from novelwriter.gui.theme import STYLES_BIG_TOOLBUTTON
 
-if TYPE_CHECKING:  # pragma: no cover
+if TYPE_CHECKING:
     from novelwriter.guimain import GuiMain
 
 logger = logging.getLogger(__name__)
@@ -155,4 +155,4 @@ class _PopRightMenu(QMenu):
             if isinstance(parent := self.parent(), QWidget):
                 offset = QPoint(parent.width(), parent.height() - self.height())
                 self.move(parent.mapToGlobal(offset))
-        return super(_PopRightMenu, self).event(event)
+        return super().event(event)

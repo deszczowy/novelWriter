@@ -75,8 +75,9 @@ class GuiLipsum(NDialog):
         self.paraCount.setMaximum(100)
         self.paraCount.setValue(5)
 
-        self.randLabel = QLabel(self.tr("Randomise order"), self)
         self.randSwitch = NSwitch(self)
+        self.randLabel = QLabel(self.tr("Randomise order"), self)
+        self.randLabel.setBuddy(self.randSwitch)
 
         self.formBox = QGridLayout()
         self.formBox.addWidget(self.headLabel, 0, 0, 1, 2, QtAlignLeft)
@@ -124,10 +125,10 @@ class GuiLipsum(NDialog):
     @classmethod
     def getLipsum(cls, parent: QWidget) -> str:
         """Pop the dialog and return the lipsum text."""
-        cls = GuiLipsum(parent)
-        cls.exec()
-        text = cls.lipsumText
-        cls.softDelete()
+        dialog = cls(parent)
+        dialog.exec()
+        text = dialog.lipsumText
+        dialog.softDelete()
         return text
 
     ##
