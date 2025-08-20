@@ -33,6 +33,7 @@ class MockGuiMain(QWidget):
         self.mainStatus = MagicMock()
         self.docEditor = MagicMock()
         self.docViewer = MagicMock()
+        self.mainProgress = MagicMock()
         self.projPath = ""
         return
 
@@ -63,6 +64,9 @@ class MockTheme:
         self.guiFont = QFont()
         self.guiFontB = QFont()
         self.guiFontBU = QFont()
+        return
+
+    def initThemes(self) -> None:
         return
 
     def getPixmap(self, *a) -> QPixmap:

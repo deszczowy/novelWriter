@@ -318,6 +318,7 @@ class GuiMainMenu(QMenuBar):
         self.aFocusTree.triggered.connect(
             lambda: self.requestFocusChange.emit(nwFocus.TREE)
         )
+        self.mainGui.addAction(self.aFocusTree)
 
         # View > Document Editor
         self.aFocusDocument = qtAddAction(self.viewMenu, self.tr("Go to Document"))
@@ -332,6 +333,7 @@ class GuiMainMenu(QMenuBar):
         self.aFocusOutline.triggered.connect(
             lambda: self.requestFocusChange.emit(nwFocus.OUTLINE)
         )
+        self.mainGui.addAction(self.aFocusOutline)
 
         # View > Separator
         self.viewMenu.addSeparator()
@@ -672,6 +674,14 @@ class GuiMainMenu(QMenuBar):
         self.aFmtStrike.setShortcut("Ctrl+D")
         self.aFmtStrike.triggered.connect(
             lambda: self.requestDocAction.emit(nwDocAction.MD_STRIKE)
+        )
+        self.mainGui.addAction(self.aFmtStrike)
+
+        # Format > Highlight
+        self.aFmtMark = qtAddAction(self.fmtMenu, self.tr("Highlight"))
+        self.aFmtMark.setShortcut("Ctrl+M")
+        self.aFmtMark.triggered.connect(
+            lambda: self.requestDocAction.emit(nwDocAction.MD_MARK)
         )
         self.mainGui.addAction(self.aFmtStrike)
 

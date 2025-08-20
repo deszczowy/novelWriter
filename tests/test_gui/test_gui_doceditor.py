@@ -27,7 +27,8 @@ import pytest
 from PyQt6.QtCore import QEvent, QMimeData, QPointF, Qt, QThreadPool, QUrl
 from PyQt6.QtGui import (
     QAction, QClipboard, QDesktopServices, QDragEnterEvent, QDragMoveEvent,
-    QDropEvent, QFont, QMouseEvent, QTextBlock, QTextCursor, QTextOption
+    QDropEvent, QFont, QMouseEvent, QTextBlock, QTextCursor, QTextDocument,
+    QTextOption
 )
 from PyQt6.QtWidgets import QApplication, QMenu, QPlainTextEdit
 
@@ -36,7 +37,7 @@ from novelwriter.common import decodeMimeHandles
 from novelwriter.constants import nwKeyWords, nwUnicode
 from novelwriter.dialogs.editlabel import GuiEditLabel
 from novelwriter.enum import nwDocAction, nwDocInsert, nwItemClass, nwItemLayout
-from novelwriter.gui.doceditor import GuiDocEditor, _TagAction
+from novelwriter.gui.doceditor import GuiDocEditor, TextAutoReplace, _TagAction
 from novelwriter.gui.dochighlight import TextBlockData
 from novelwriter.text.counting import standardCounter
 from novelwriter.types import (
@@ -514,31 +515,35 @@ def testGuiEditor_SpellChecking(qtbot, monkeypatch, nwGUI, projPath, ipsumText, 
     # Run SpellCheck
     # ==============
     SHARED.project.data.setSpellCheck(True)
+    LORAX = "Lorax\U0001F03A"
 
     cursor = docEditor.textCursor()
     cursor.setPosition(16)
     data = cursor.block().userData()
     assert cursor.block().text().startswith("Lorem")
     assert isinstance(data, TextBlockData)
-    data._spellErrors = [(0, 5)]
+    data._spellErrors = [(0, 5, "Lorem")]
 
     # No known position
-    assert docEditor._qDocument.spellErrorAtPos(-1) == ("", -1, -1, [])
+    assert docEditor._qDocument.spellErrorAtPos(-1) == ("", -1, [])
 
     # With Suggestion
     with monkeypatch.context() as mp:
-        mp.setattr(SHARED.spelling, "suggestWords", lambda *a: ["Lorax"])
+        mp.setattr(SHARED.spelling, "suggestWords", lambda *a: [LORAX])
 
         ctxMenu = getMenuForPos(docEditor, 16)
         assert ctxMenu is not None
         actions = [x.text() for x in ctxMenu.actions() if x.text()]
         assert "Spelling Suggestion(s)" in actions
-        assert f"{nwUnicode.U_ENDASH} Lorax" in actions
+        assert f"{nwUnicode.U_ENDASH} {LORAX}" in actions
         ctxMenu.actions()[7].trigger()
         QApplication.processEvents()
-        assert docEditor.getText() == text.replace("Lorem", "Lorax", 1)
+        assert docEditor.getText() == text.replace("Lorem", LORAX, 1)
         ctxMenu.setObjectName("")
         ctxMenu.deleteLater()
+
+    # Update Entry
+    data._spellErrors = [(0, 7, LORAX)]
 
     # Without Suggestion
     with monkeypatch.context() as mp:
@@ -548,7 +553,7 @@ def testGuiEditor_SpellChecking(qtbot, monkeypatch, nwGUI, projPath, ipsumText, 
         assert ctxMenu is not None
         actions = [x.text() for x in ctxMenu.actions() if x.text()]
         assert f"{nwUnicode.U_ENDASH} No Suggestions" in actions
-        assert docEditor.getText() == text.replace("Lorem", "Lorax", 1)
+        assert docEditor.getText() == text.replace("Lorem", LORAX, 1)
         ctxMenu.setObjectName("")
         ctxMenu.deleteLater()
 
@@ -562,11 +567,11 @@ def testGuiEditor_SpellChecking(qtbot, monkeypatch, nwGUI, projPath, ipsumText, 
         assert "Ignore Word" in actions
         assert "Add Word to Dictionary" in actions
 
-        assert "Lorax" not in SHARED.spelling._userDict
+        assert LORAX not in SHARED.spelling._userDict
         ctxMenu.actions()[7].trigger()  # Ignore
-        assert "Lorax" not in SHARED.spelling._userDict
+        assert LORAX not in SHARED.spelling._userDict
         ctxMenu.actions()[8].trigger()  # Add
-        assert "Lorax" in SHARED.spelling._userDict
+        assert LORAX in SHARED.spelling._userDict
         ctxMenu.setObjectName("")
         ctxMenu.deleteLater()
 
@@ -674,9 +679,16 @@ def testGuiEditor_Actions(qtbot, nwGUI, projPath, ipsumText, mockRnd):
     assert docEditor.docAction(nwDocAction.UNDO) is True
     assert docEditor.getText() == text
 
+    # Mark
+    docEditor.setCursorPosition(50)
+    assert docEditor.docAction(nwDocAction.MD_MARK) is True
+    assert docEditor.getText() == text.replace("consectetur", "==consectetur==")
+    assert docEditor.docAction(nwDocAction.UNDO) is True
+    assert docEditor.getText() == text
+
     # Redo
     assert docEditor.docAction(nwDocAction.REDO) is True
-    assert docEditor.getText() == text.replace("consectetur", "~~consectetur~~")
+    assert docEditor.getText() == text.replace("consectetur", "==consectetur==")
     assert docEditor.docAction(nwDocAction.UNDO) is True
     assert docEditor.getText() == text
 
@@ -2067,7 +2079,7 @@ def testGuiEditor_Search(qtbot, monkeypatch, nwGUI, prjLipsum):
     origText = docEditor.getText()
 
     # Select the Word "est"
-    docEditor.setCursorPosition(645)
+    docEditor.setCursorPosition(663)
     docEditor._makeSelection(QTextCursor.SelectionType.WordUnderCursor)
     cursor = docEditor.textCursor()
     assert cursor.selectedText() == "est"
@@ -2080,11 +2092,11 @@ def testGuiEditor_Search(qtbot, monkeypatch, nwGUI, prjLipsum):
     # Find next by enter key
     monkeypatch.setattr(docSearch.searchBox, "hasFocus", lambda: True)
     qtbot.keyClick(docSearch.searchBox, Qt.Key.Key_Return, delay=KEY_DELAY)
-    assert abs(docEditor.getCursorPosition() - 1299) < 3
+    assert abs(docEditor.getCursorPosition() - 1317) < 3
 
     # Find next by button
     qtbot.mouseClick(docSearch.searchButton, QtMouseLeft, delay=KEY_DELAY)
-    assert abs(docEditor.getCursorPosition() - 1513) < 3
+    assert abs(docEditor.getCursorPosition() - 1531) < 3
 
     # Activate loop search
     docSearch.toggleLoop.activate(QAction.ActionEvent.Trigger)
@@ -2093,7 +2105,7 @@ def testGuiEditor_Search(qtbot, monkeypatch, nwGUI, prjLipsum):
 
     # Find next by menu Search > Find Next
     nwGUI.mainMenu.aFindNext.activate(QAction.ActionEvent.Trigger)
-    assert abs(docEditor.getCursorPosition() - 647) < 3
+    assert abs(docEditor.getCursorPosition() - 665) < 3
 
     # Close search
     docSearch.cancelSearch.activate(QAction.ActionEvent.Trigger)
@@ -2132,13 +2144,13 @@ def testGuiEditor_Search(qtbot, monkeypatch, nwGUI, prjLipsum):
     # Set valid RegEx
     docSearch.setSearchText(r"\bSus")
     qtbot.mouseClick(docSearch.searchButton, QtMouseLeft, delay=KEY_DELAY)
-    assert abs(docEditor.getCursorPosition() - 223) < 3
+    assert abs(docEditor.getCursorPosition() - 241) < 3
 
     # Find next and then prev
     nwGUI.mainMenu.aFindNext.activate(QAction.ActionEvent.Trigger)
-    assert abs(docEditor.getCursorPosition() - 324) < 3
+    assert abs(docEditor.getCursorPosition() - 342) < 3
     nwGUI.mainMenu.aFindPrev.activate(QAction.ActionEvent.Trigger)
-    assert abs(docEditor.getCursorPosition() - 223) < 3
+    assert abs(docEditor.getCursorPosition() - 241) < 3
 
     # Make RegEx case sensitive
     docSearch.toggleCase.activate(QAction.ActionEvent.Trigger)
@@ -2147,11 +2159,11 @@ def testGuiEditor_Search(qtbot, monkeypatch, nwGUI, prjLipsum):
 
     # Find next/prev (one result)
     nwGUI.mainMenu.aFindNext.activate(QAction.ActionEvent.Trigger)
-    assert abs(docEditor.getCursorPosition() - 626) < 3
+    assert abs(docEditor.getCursorPosition() - 644) < 3
     nwGUI.mainMenu.aFindPrev.activate(QAction.ActionEvent.Trigger)
-    assert abs(docEditor.getCursorPosition() - 626) < 3
+    assert abs(docEditor.getCursorPosition() - 644) < 3
     nwGUI.mainMenu.aFindNext.activate(QAction.ActionEvent.Trigger)
-    assert abs(docEditor.getCursorPosition() - 626) < 3
+    assert abs(docEditor.getCursorPosition() - 644) < 3
 
     # Trigger replace
     nwGUI.mainMenu.aReplace.activate(QAction.ActionEvent.Trigger)
@@ -2168,22 +2180,22 @@ def testGuiEditor_Search(qtbot, monkeypatch, nwGUI, prjLipsum):
     assert CONFIG.searchMatchCap is True
 
     # Replace "Sus" with "Foo" via menu
-    docEditor.setCursorPosition(605)
+    docEditor.setCursorPosition(623)
     nwGUI.mainMenu.aFindNext.activate(QAction.ActionEvent.Trigger)
     nwGUI.mainMenu.aReplaceNext.activate(QAction.ActionEvent.Trigger)
-    assert docEditor.getText()[623:634] == "Foopendisse"
+    assert docEditor.getText()[641:652] == "Foopendisse"
 
     # Find next/prev to loop file
     nwGUI.mainMenu.aFindNext.activate(QAction.ActionEvent.Trigger)
-    assert abs(docEditor.getCursorPosition() - 223) < 3
+    assert abs(docEditor.getCursorPosition() - 241) < 3
     nwGUI.mainMenu.aFindPrev.activate(QAction.ActionEvent.Trigger)
-    assert abs(docEditor.getCursorPosition() - 1805) < 3
+    assert abs(docEditor.getCursorPosition() - 1823) < 3
     nwGUI.mainMenu.aFindNext.activate(QAction.ActionEvent.Trigger)
-    assert abs(docEditor.getCursorPosition() - 223) < 3
+    assert abs(docEditor.getCursorPosition() - 241) < 3
 
     # Replace "sus" with "foo" via replace button
     qtbot.mouseClick(docSearch.replaceButton, QtMouseLeft, delay=KEY_DELAY)
-    assert docEditor.getText()[220:228] == "foocipit"
+    assert docEditor.getText()[238:246] == "foocipit"
 
     # Revert last two replaces
     assert docEditor.docAction(nwDocAction.UNDO)
@@ -2197,7 +2209,7 @@ def testGuiEditor_Search(qtbot, monkeypatch, nwGUI, prjLipsum):
 
     # Close search and select "est" again
     docSearch.cancelSearch.activate(QAction.ActionEvent.Trigger)
-    docEditor.setCursorPosition(645)
+    docEditor.setCursorPosition(663)
     docEditor._makeSelection(QTextCursor.SelectionType.WordUnderCursor)
     cursor = docEditor.textCursor()
     assert cursor.selectedText() == "est"
@@ -2214,9 +2226,9 @@ def testGuiEditor_Search(qtbot, monkeypatch, nwGUI, prjLipsum):
 
     # Only one match
     nwGUI.mainMenu.aFindNext.activate(QAction.ActionEvent.Trigger)
-    assert abs(docEditor.getCursorPosition() - 647) < 3
+    assert abs(docEditor.getCursorPosition() - 665) < 3
     nwGUI.mainMenu.aFindNext.activate(QAction.ActionEvent.Trigger)
-    assert abs(docEditor.getCursorPosition() - 647) < 3
+    assert abs(docEditor.getCursorPosition() - 665) < 3
 
     # Enable next doc search
     docSearch.toggleProject.activate(QAction.ActionEvent.Trigger)
@@ -2227,9 +2239,9 @@ def testGuiEditor_Search(qtbot, monkeypatch, nwGUI, prjLipsum):
     nwGUI.mainMenu.aFindNext.activate(QAction.ActionEvent.Trigger)
     assert docEditor.docHandle == "2426c6f0ca922"  # Next document
     nwGUI.mainMenu.aFindNext.activate(QAction.ActionEvent.Trigger)
-    assert abs(docEditor.getCursorPosition() - 620) < 3
+    assert abs(docEditor.getCursorPosition() - 651) < 3
     nwGUI.mainMenu.aFindNext.activate(QAction.ActionEvent.Trigger)
-    assert abs(docEditor.getCursorPosition() - 1127) < 3
+    assert abs(docEditor.getCursorPosition() - 1157) < 3
 
     # Next doc, no match
     assert CONFIG.searchNextFile is True
@@ -2331,3 +2343,142 @@ def testGuiEditor_Search(qtbot, monkeypatch, nwGUI, prjLipsum):
     assert docEditor.textCursor().selectedText() == ""
 
     # qtbot.stop()
+
+
+@pytest.mark.gui
+def testGuiEditor_TextAutoReplaceSymbols():
+    """Test the editor auto-replace functionality."""
+    CONFIG.fmtSQuoteOpen = nwUnicode.U_LSQUO
+    CONFIG.fmtSQuoteClose = nwUnicode.U_RSQUO
+    CONFIG.fmtDQuoteOpen = nwUnicode.U_LDQUO
+    CONFIG.fmtDQuoteClose = nwUnicode.U_RDQUO
+
+    CONFIG.doReplaceSQuote = True
+    CONFIG.doReplaceDQuote = True
+    CONFIG.doReplaceDash = True
+    CONFIG.doReplaceDots = True
+
+    ar = TextAutoReplace()
+
+    def prep(text: str) -> tuple[str, int]:
+        return text, len(text)
+
+    # Double Quote Open
+    assert ar._determine(*prep('"')) == (1, nwUnicode.U_LDQUO)
+    assert ar._determine(*prep('Stuff "')) == (1, nwUnicode.U_LDQUO)
+    assert ar._determine(*prep('>"')) == (1, nwUnicode.U_LDQUO)
+    assert ar._determine(*prep('>>"')) == (1, nwUnicode.U_LDQUO)
+    assert ar._determine(*prep('_"')) == (1, nwUnicode.U_LDQUO)
+    assert ar._determine(*prep(' _"')) == (1, nwUnicode.U_LDQUO)
+    assert ar._determine(*prep('\u00a0_"')) == (1, nwUnicode.U_LDQUO)
+    assert ar._determine(*prep('**"')) == (1, nwUnicode.U_LDQUO)
+    assert ar._determine(*prep(' **"')) == (1, nwUnicode.U_LDQUO)
+    assert ar._determine(*prep('\u00a0**"')) == (1, nwUnicode.U_LDQUO)
+    assert ar._determine(*prep('=="')) == (1, nwUnicode.U_LDQUO)
+    assert ar._determine(*prep(' =="')) == (1, nwUnicode.U_LDQUO)
+    assert ar._determine(*prep('\u00a0=="')) == (1, nwUnicode.U_LDQUO)
+    assert ar._determine(*prep('~~"')) == (1, nwUnicode.U_LDQUO)
+    assert ar._determine(*prep(' ~~"')) == (1, nwUnicode.U_LDQUO)
+    assert ar._determine(*prep('\u00a0~~"')) == (1, nwUnicode.U_LDQUO)
+
+    # Double Quote Close
+    assert ar._determine(*prep('Stuff"')) == (1, nwUnicode.U_RDQUO)
+
+    # Single Quote Open
+    assert ar._determine(*prep("'")) == (1, nwUnicode.U_LSQUO)
+    assert ar._determine(*prep("Stuff '")) == (1, nwUnicode.U_LSQUO)
+    assert ar._determine(*prep(">'")) == (1, nwUnicode.U_LSQUO)
+    assert ar._determine(*prep(">>'")) == (1, nwUnicode.U_LSQUO)
+    assert ar._determine(*prep("_'")) == (1, nwUnicode.U_LSQUO)
+    assert ar._determine(*prep(" _'")) == (1, nwUnicode.U_LSQUO)
+    assert ar._determine(*prep("\u00a0_'")) == (1, nwUnicode.U_LSQUO)
+    assert ar._determine(*prep("**'")) == (1, nwUnicode.U_LSQUO)
+    assert ar._determine(*prep(" **'")) == (1, nwUnicode.U_LSQUO)
+    assert ar._determine(*prep("\u00a0**'")) == (1, nwUnicode.U_LSQUO)
+    assert ar._determine(*prep("=='")) == (1, nwUnicode.U_LSQUO)
+    assert ar._determine(*prep(" =='")) == (1, nwUnicode.U_LSQUO)
+    assert ar._determine(*prep("\u00a0=='")) == (1, nwUnicode.U_LSQUO)
+    assert ar._determine(*prep("~~'")) == (1, nwUnicode.U_LSQUO)
+    assert ar._determine(*prep(" ~~'")) == (1, nwUnicode.U_LSQUO)
+    assert ar._determine(*prep("\u00a0~~'")) == (1, nwUnicode.U_LSQUO)
+
+    # Single Quote Close
+    assert ar._determine(*prep("Stuff'")) == (1, nwUnicode.U_RSQUO)
+
+    # Dashes
+    assert ar._determine(*prep("-")) == (0, "-")
+    assert ar._determine(*prep("--")) == (2, nwUnicode.U_ENDASH)
+    assert ar._determine(*prep("---")) == (3, nwUnicode.U_EMDASH)
+    assert ar._determine(*prep("----")) == (4, nwUnicode.U_HBAR)
+    assert ar._determine(*prep("\u2013-")) == (2, nwUnicode.U_EMDASH)
+    assert ar._determine(*prep("\u2014-")) == (2, nwUnicode.U_HBAR)
+
+    # Ellipsis
+    assert ar._determine(*prep(".")) == (0, ".")
+    assert ar._determine(*prep("..")) == (0, ".")
+    assert ar._determine(*prep("...")) == (3, nwUnicode.U_HELLIP)
+
+    # Block Typed Line Separator (#1150)
+    assert ar._determine(*prep("Text\u2028")) == (1, nwUnicode.U_PSEP)
+
+
+@pytest.mark.gui
+def testGuiEditor_TextAutoReplaceProcess():
+    """Test the editor auto-replace functionality."""
+    CONFIG.fmtDQuoteOpen = nwUnicode.U_LAQUO
+    CONFIG.fmtDQuoteClose = nwUnicode.U_RAQUO
+
+    CONFIG.doReplaceDQuote = True
+    CONFIG.doReplaceDots = True
+
+    ar = TextAutoReplace()
+    doc = QTextDocument()
+
+    def prep(text: str) -> tuple[str, QTextCursor]:
+        doc.setPlainText(text)
+        cursor = QTextCursor(doc)
+        cursor.setPosition(len(text))
+        return text, cursor
+
+    # Nothing to Process
+    assert ar.process(*prep("")) is False
+
+    # Standard Auto-Replace
+    assert ar.process(*prep("Text ...")) is True
+    assert doc.toRawText() == "Text \u2026"
+
+    # Pad Before, Normal
+    CONFIG.fmtPadBefore = ":\u00bb"
+    CONFIG.fmtPadThin = False
+    ar.initSettings()
+    assert ar.process(*prep("Text:")) is True
+    assert doc.toRawText() == "Text\u00a0:"
+    assert ar.process(*prep("Text :")) is True  # See #1061
+    assert doc.toRawText() == "Text\u00a0:"
+    assert ar.process(*prep('Text"')) is True
+    assert doc.toRawText() == "Text\u00a0»"
+    assert ar.process(*prep("@Synopsis:")) is False
+    assert doc.toRawText() == "@Synopsis:"
+
+    # Pad Before, Thin
+    CONFIG.fmtPadBefore = ":\u00bb"
+    CONFIG.fmtPadThin = True
+    ar.initSettings()
+    assert ar.process(*prep("Text:")) is True
+    assert doc.toRawText() == "Text\u202f:"
+    assert ar.process(*prep("Text :")) is True  # See #1061
+    assert doc.toRawText() == "Text\u202f:"
+
+    # Pad After, Normal
+    CONFIG.fmtPadAfter = "\u00ab"
+    CONFIG.fmtPadThin = False
+    ar.initSettings()
+    assert ar.process(*prep('Text "')) is True
+    assert doc.toRawText() == "Text «\u00a0"
+
+    # Pad After, Thin
+    CONFIG.fmtPadAfter = "\u00ab"
+    CONFIG.fmtPadThin = True
+    ar.initSettings()
+    assert ar.process(*prep('Text "')) is True
+    assert doc.toRawText() == "Text «\u202f"

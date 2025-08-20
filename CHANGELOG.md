@@ -1,5 +1,164 @@
 # novelWriter Changelog
 
+## Version 2.7.4 [2025-07-15]
+
+### Release Notes
+
+This is a patch release that updates the Czech and French translations, and makes some changes to
+the available Material Symbols icon themes. Additional icon themes are no longer automatically
+included in all release packages due to license constraints.
+
+### Detailed Changelog
+
+**Internationalisation**
+
+* The Czech and French translations are now complete. PR #2469.
+
+**Packaging**
+
+* Only the Material Symbols icons are included by default in packages. Other icon themes are
+  included depending on licensing restrictions for free and non-free requirements. The Material
+  Symbols Bold themes have been dropped, and a Sharp theme added. Issue #2462. PR #2467.
+
+----
+
+## Version 2.7.3 [2025-07-07]
+
+### Release Notes
+
+This is a patch release that fixes a bug in, and makes a few improvement to, Preferences.
+
+### Detailed Changelog
+
+**Bugfixes**
+
+* Fixes an issue where novelWriter would crash if a `%` was added to any of the free text settings
+  fields in Preferences. Issue #2455. PR #2456.
+
+**Improvements**
+
+* The "Dialogue line symbols" setting in Preferences now has an "Add" button with a dropdown menu
+  for all the symbols allowed in this field. Since virtually none of them are available on a
+  regular keyboard, this makes it easier to add them and more transparent which symbols are allowed
+  in the box. Issue #2453. PR #2457.
+* The switch for the "Allow open-ended dialogue" setting in Preferences has been moved up one line
+  so it is clearer that it only applies to quoted dialogue, and not to the alternative dialogue
+  settings. Issue #2454. PR #2457.
+
+**Packaging**
+
+* Package license information has been updated to also list the licenses for the new icon themes.
+  Issue #2434. PRs #2435 and #2458.
+
+----
+
+## Version 2.7.2 [2025-06-24]
+
+### Release Notes
+
+This is a patch release that fixes several issues related to DocX and PDF manuscript documents,
+improves how line breaks, alignment and indentation is processed, and fixes some issues with
+displaying tags for novel documents on the user interface.
+
+### Detailed Changelog
+
+**Bugfixes**
+
+* Fixed an issue where escaped markup characters were not replaced properly in DocX and PDF
+  documents, and in previews. Issue #2410. PR #2411.
+* Fixed an issue where titles with line breaks in them would have page breaks applied to both lines
+  for preview and PDF documents. Issue #2415. PR #2416.
+* Fixed an issue where the justified text setting would not be properly applied to a paragraph in a
+  manuscript document if there was a line break in the paragraph, but single line breaks were set
+  to be ignored. Issue #2426. PR #2427.
+* Fixed an issue where the "Tag" field of the Outline View details panel remained blank even if a
+  tag was set for the novel document. Issue #2428. PR #2429.
+
+**Improvements**
+
+* When comments are enabled in the viewer, story comments should also be visible. A separate filter
+  button will be added for this in 2.8. PR #2420.
+* When a paragraph has line breaks in it, the alignment tag will now override first line
+  indentation even if the alignment tag is not on the first line. This is more consistent with the
+  alignment behaviour for multi-line paragraphs in general. Issue #2425. PR #2427.
+* Tags will now be shown in the Novel View tooltip pop-out under the triangle button, together with
+  all the other meta data collected about a document or heading. PR #2429.
+
+**Documentation**
+
+* The documentation on how alignment and first line indentation works in conjunction with
+  in-paragraph line breaks, the setting to keep or ignore such line breaks, and the forced line
+  break shortcode, has been improved. Issue #2425. PR #2427.
+
+----
+
+## Version 2.7.1 [2025-06-09]
+
+### Release Notes
+
+This is a patch release that fixes some issues with tags and references, an issue with the
+auto-complete menu on Windows, and some issues with the AppImage on Linux. The Czech translation
+for 2.7 has also been completed.
+
+### Detailed Changelog
+
+**Bugfixes**
+
+* Fix a bug where tags would be listed in the auto-complete menu for mentions even if the file
+  defining it had been moved to Archive or Trash. Issue #2387. PR #2389.
+* Fixed a bug that seems to only have occurred on Windows where the auto-complete menu would hold
+  on to the return and arrow keys even when it was hidden. Issue #2386. PR #2389.
+
+**Improvements**
+
+* The auto-complete menu in the editor no longer shows any suggestions when defining the tag.
+  This never made sense anyway. PR #2389.
+
+**Internationalisation**
+
+* Updated the Czech. PR #2393.
+
+**Packaging**
+
+* Fixed an issue with the AppImage release where on some platforms `libxcb-cursor0` was missing.
+  The library is now included in the AppImage. Issue #2374. PR #2392.
+
+----
+
+## Version 2.7 [2025-06-01]
+
+### Release Notes
+
+The 2.7 release updates the 2.7 RC 1 release and makes an improvement to the build settings tool.
+It also updates most translations and updates the French version of the documentation.
+
+See the website for complete [Release Notes](https://novelwriter.io/releases/release_2_7.html).
+
+### Detailed Changelog
+
+**Improvement**
+
+* The Manuscript Build Settings dialog now works on a copy of the settings so that if the dialog
+  box is closed without saving, all changes are discarded. It should also now detect any change
+  made to properly raise a confirmation prompt when closing without saving. Issue #2350. PR #2351.
+
+**Documentation**
+
+* The user documentation has been restructured, and the Getting Started section has been made less
+  technical. The install instructions have been moved out and into the main website. The technical
+  and in-depth parts of the documentation have been kept, but moved further back so that the
+  documentation can be read from the start and to the point where the user has enough information.
+  The larger sections have also been split up so that it should be easier to find the wanted
+  information directly from the menu. Issue #2345. PR #2355.
+
+**Internationalisation**
+
+* Updated US English, Japanese, Norwegian. German, Italian, Polish, Brazilian Portuguese and
+  Chinese translation files. PR #2353.
+* French documentation updated by @Karduin. Issue #2360. PR #2361.
+
+----
+
 ## Version 2.7 RC 1 [2025-05-19]
 
 ### Release Notes

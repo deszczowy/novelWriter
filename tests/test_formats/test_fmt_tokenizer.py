@@ -783,7 +783,7 @@ def testFmtToken_MetaFormat(mockGUI):
     tokens._text = "% synopsis: The synopsis\n"
     tokens.tokenizeText()
     assert tokens._blocks == [(
-        BlockTyp.COMMENT, "", "Synopsis: The synopsis", [
+        BlockTyp.SUMMARY, "", "Synopsis: The synopsis", [
             (0, TextFmt.B_B, ""), (0, TextFmt.COL_B, "modifier"),
             (9, TextFmt.COL_E, ""), (9, TextFmt.B_E, ""),
             (10, TextFmt.COL_B, "note"), (22, TextFmt.COL_E, "")
@@ -800,11 +800,50 @@ def testFmtToken_MetaFormat(mockGUI):
     tokens._text = "% short: A short description\n"
     tokens.tokenizeText()
     assert tokens._blocks == [(
-        BlockTyp.COMMENT, "", "Short Description: A short description", [
+        BlockTyp.SUMMARY, "", "Short Description: A short description", [
             (0, TextFmt.B_B, ""), (0, TextFmt.COL_B, "modifier"),
             (18, TextFmt.COL_E, ""), (18, TextFmt.B_E, ""),
             (19, TextFmt.COL_B, "note"), (38, TextFmt.COL_E, ""),
         ], BlockFmt.NONE
+    )]
+
+    # Story Comments
+    tokens.setCommentType(nwComment.STORY, False)
+    tokens.setCommentType(nwComment.NOTE, False)
+    tokens._text = (
+        "%Story.Stuff: Stuff happens\n"
+        "%Note.More: That stuff that happened\n"
+        "%Note.Other: That other stuff that happened\n"
+    )
+    tokens.tokenizeText()
+    assert tokens._blocks == []
+
+    tokens.setCommentType(nwComment.STORY, True)
+    tokens.setCommentType(nwComment.NOTE, True)
+    tokens._text = (
+        "%Story.Stuff: Stuff happens\n"
+        "%Note.More: That stuff that happened\n"
+        "%Note.Other: That other stuff that happened\n"
+    )
+    tokens.tokenizeText()
+    assert tokens._blocks == [(
+        BlockTyp.NOTE, "", "Story Structure (Stuff): Stuff happens", [
+            (0, TextFmt.B_B, ""), (0, TextFmt.COL_B, "modifier"),
+            (24, TextFmt.COL_E, ""), (24, TextFmt.B_E, ""),
+            (25, TextFmt.COL_B, "note"), (38, TextFmt.COL_E, "")
+        ], BlockFmt.Z_BTM
+    ), (
+        BlockTyp.NOTE, "", "Note (More): That stuff that happened", [
+            (0, TextFmt.B_B, ""), (0, TextFmt.COL_B, "modifier"),
+            (12, TextFmt.COL_E, ""), (12, TextFmt.B_E, ""),
+            (13, TextFmt.COL_B, "note"), (37, TextFmt.COL_E, "")
+        ], BlockFmt.Z_TOP | BlockFmt.Z_BTM
+    ), (
+        BlockTyp.NOTE, "", "Note (Other): That other stuff that happened", [
+            (0, TextFmt.B_B, ""), (0, TextFmt.COL_B, "modifier"),
+            (13, TextFmt.COL_E, ""), (13, TextFmt.B_E, ""),
+            (14, TextFmt.COL_B, "note"), (44, TextFmt.COL_E, "")
+        ], BlockFmt.Z_TOP
     )]
 
     # Keyword
@@ -918,6 +957,11 @@ def testFmtToken_ExtractFormats(mockGUI):
     text, fmt = tokens._extractFormats("Text with ~~strikethrough~~ in it.")
     assert text == "Text with strikethrough in it."
     assert fmt == [(10, TextFmt.D_B, ""), (23, TextFmt.D_E, "")]
+
+    # Plain mark
+    text, fmt = tokens._extractFormats("Text with ==a highlight== in it.")
+    assert text == "Text with a highlight in it."
+    assert fmt == [(10, TextFmt.M_B, ""), (21, TextFmt.M_E, "")]
 
     # Nested bold/italics
     text, fmt = tokens._extractFormats("Text with **bold and _italics_** in it.")
@@ -1071,6 +1115,80 @@ def testFmtToken_Paragraphs(mockGUI):
                 (14, TextFmt.I_E, ""),
             ], BlockFmt.NONE
         ),
+    ]
+
+
+@pytest.mark.core
+def testFmtToken_BreakAlignIndent(mockGUI):
+    """Test the splitting of paragraphs with alignment."""
+    project = NWProject()
+    tokens = BareTokenizer(project)
+    tokens._handle = TMH
+
+    for text in [
+        "This is text <<\nspanning multiple\nlines",
+        "This is text\nspanning multiple <<\nlines",
+        "This is text\nspanning multiple\nlines <<",
+    ]:
+        # Preserve Breaks
+        tokens.setKeepLineBreaks(True)
+        tokens._text = text
+        tokens.tokenizeText()
+        assert tokens._blocks == [
+            (BlockTyp.TEXT, "", "This is text\nspanning multiple\nlines", [], BlockFmt.LEFT),
+        ]
+
+        # Don't Preserve Breaks
+        tokens.setKeepLineBreaks(False)
+        tokens._text = text
+        tokens.tokenizeText()
+        assert tokens._blocks == [
+            (BlockTyp.TEXT, "", "This is text spanning multiple lines", [], BlockFmt.LEFT),
+        ]
+
+        # With Justify
+        # This should disable justify
+        tokens.setKeepLineBreaks(True)
+        tokens.setJustify(True)
+        tokens._text = text
+        tokens.tokenizeText()
+        assert tokens._blocks == [
+            (BlockTyp.TEXT, "", "This is text\nspanning multiple\nlines", [], BlockFmt.LEFT),
+        ]
+
+        # With Indent
+        # This should disable indent
+        tokens.setKeepLineBreaks(True)
+        tokens.setFirstLineIndent(True, 1.0, False)
+        tokens._text = text
+        tokens.tokenizeText()
+        assert tokens._blocks == [
+            (BlockTyp.TEXT, "", "This is text\nspanning multiple\nlines", [], BlockFmt.LEFT),
+        ]
+
+
+@pytest.mark.core
+def testFmtToken_BreakJustify(mockGUI):
+    """Test the of processing of justify with breaks."""
+    project = NWProject()
+    tokens = BareTokenizer(project)
+    tokens._handle = TMH
+    tokens.setJustify(True)
+
+    # Applied to all lines when breaks are preserved
+    tokens._text = "This is text\nspanning multiple\nlines"
+    tokens.setKeepLineBreaks(True)
+    tokens.tokenizeText()
+    assert tokens._blocks == [
+        (BlockTyp.TEXT, "", "This is text\nspanning multiple\nlines", [], BlockFmt.JUSTIFY),
+    ]
+
+    # Turning off breaks should make no difference (see issue #2426)
+    tokens._text = "This is text\nspanning multiple\nlines"
+    tokens.setKeepLineBreaks(False)
+    tokens.tokenizeText()
+    assert tokens._blocks == [
+        (BlockTyp.TEXT, "", "This is text spanning multiple lines", [], BlockFmt.JUSTIFY),
     ]
 
 
@@ -1558,7 +1676,7 @@ def testFmtToken_TextIndent(mockGUI):
     ]
     assert tokens._blocks == [
         (BlockTyp.HEAD3,   TM1, "Scene Two", [], BlockFmt.NONE),
-        (BlockTyp.COMMENT, "",  "Synopsis: Stuff happens.", tFmt, BlockFmt.NONE),
+        (BlockTyp.SUMMARY, "",  "Synopsis: Stuff happens.", tFmt, BlockFmt.NONE),
     ]
     assert tokens._noIndent is True
 
@@ -1654,7 +1772,7 @@ def testFmtToken_ProcessHeaders(mockGUI):
     # H2: Chapter Word Number
     tokens._text = "## Chapter\n"
     tokens.setChapterFormat(f"Chapter {nwHeadFmt.CH_WORD}")
-    tokens._hFormatter._chCount = 0
+    tokens._hFormatter._chapter = 0
     tokens.tokenizeText()
     assert tokens._blocks == [
         (BlockTyp.HEAD1, TM1, "Chapter One", [], BlockFmt.PBB),
@@ -1728,8 +1846,8 @@ def testFmtToken_ProcessHeaders(mockGUI):
     # H3: Scene w/Absolute Number
     tokens._text = "### A Scene\n"
     tokens.setSceneFormat(f"Scene {nwHeadFmt.SC_ABS}", False)
-    tokens._hFormatter._scAbsCount = 0
-    tokens._hFormatter._scChCount = 0
+    tokens._hFormatter._scene = 0
+    tokens._hFormatter._absolute = 0
     tokens.tokenizeText()
     assert tokens._blocks == [
         (BlockTyp.HEAD2, TM1, "Scene 1", [], BlockFmt.NONE),
@@ -1738,8 +1856,8 @@ def testFmtToken_ProcessHeaders(mockGUI):
     # H3: Scene w/Chapter Number
     tokens._text = "### A Scene\n"
     tokens.setSceneFormat(f"Scene {nwHeadFmt.CH_NUM}.{nwHeadFmt.SC_NUM}", False)
-    tokens._hFormatter._scAbsCount = 0
-    tokens._hFormatter._scChCount = 1
+    tokens._hFormatter._scene = 1
+    tokens._hFormatter._absolute = 0
     tokens.tokenizeText()
     assert tokens._blocks == [
         (BlockTyp.HEAD2, TM1, "Scene 3.2", [], BlockFmt.NONE),
@@ -2544,9 +2662,9 @@ def testFmtToken_HeadingFormatter(fncPath, mockGUI, mockRnd):
 
     # Special Formats
     # ===============
-    formatter._chCount = 2
-    formatter._scChCount = 3
-    formatter._scAbsCount = 8
+    formatter._chapter = 2
+    formatter._scene = 3
+    formatter._absolute = 8
 
     # Chapter Number Word
     cFormat = f"Chapter {nwHeadFmt.CH_WORD}, Scene {nwHeadFmt.SC_NUM} - {nwHeadFmt.TITLE}"

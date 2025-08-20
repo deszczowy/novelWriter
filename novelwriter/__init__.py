@@ -49,9 +49,9 @@ __license__    = "GPLv3"
 __author__     = "Veronica Berglyd Olsen"
 __maintainer__ = "Veronica Berglyd Olsen"
 __email__      = "code@vkbo.net"
-__version__    = "2.7rc1"
-__hexversion__ = "0x020700c1"
-__date__       = "2025-05-19"
+__version__    = "2.8a2"
+__hexversion__ = "0x020800a2"
+__date__       = "2025-07-16"
 __status__     = "Stable"
 __domain__     = "novelwriter.io"
 
@@ -296,7 +296,8 @@ def _createApp(style: str) -> QApplication:
     """Create the app. This is done in a function to make it easier to
     block app creation during testing.
     """
-    app = QApplication([CONFIG.appName, f"-style={style}"])
+    app = QApplication([CONFIG.appName])
+    app.setStyle(style)
     app.setApplicationName(CONFIG.appName)
     app.setApplicationVersion(__version__)
     app.setOrganizationDomain(__domain__)

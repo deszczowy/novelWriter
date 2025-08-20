@@ -131,12 +131,6 @@ class Index:
         self._novelExtra = extra
         return
 
-    def setItemClass(self, tHandle: str, itemClass: nwItemClass) -> None:
-        """Update the class for all tags of a handle."""
-        logger.info("Updating class for '%s'", tHandle)
-        self._tagsIndex.updateClass(tHandle, itemClass.name)
-        return
-
     ##
     #  Public Methods
     ##
@@ -153,14 +147,17 @@ class Index:
     def rebuild(self) -> None:
         """Rebuild the entire index from scratch."""
         self.clear()
+        SHARED.initMainProgress(len(self._project.tree))
         for nwItem in self._project.tree:
             if nwItem.isFileType():
                 text = self._project.storage.getDocumentText(nwItem.itemHandle)
                 self.scanText(nwItem.itemHandle, text, blockSignal=True)
+            SHARED.incMainProgress()
         self._indexBroken = False
         SHARED.emitIndexAvailable(self._project)
         for tHandle in self._novelModels:
             self.refreshNovelModel(tHandle)
+        SHARED.clearMainProgress()
         return
 
     def deleteHandle(self, tHandle: str) -> None:
@@ -181,6 +178,16 @@ class Index:
         if tHandle and self._project.tree.checkType(tHandle, nwItemType.FILE):
             logger.debug("Re-indexing item '%s'", tHandle)
             self.scanText(tHandle, self._project.storage.getDocumentText(tHandle))
+        return
+
+    def refreshHandle(self, tHandle: str) -> None:
+        """Update the class for all tags of a handle."""
+        if item := self._project.tree[tHandle]:
+            logger.info("Updating class for '%s'", tHandle)
+            if item.isInactiveClass():
+                self.deleteHandle(tHandle)
+            else:
+                self._tagsIndex.updateClass(tHandle, item.itemClass.name)
         return
 
     def indexChangedSince(self, checkTime: int | float) -> bool:
@@ -704,17 +711,19 @@ class Index:
         return 0, 0, 0
 
     def getReferences(self, tHandle: str, sTitle: str | None = None) -> dict[str, list[str]]:
-        """Extract all references made in a file, and optionally title
-        section.
+        """Extract all tags and references made in a file, and
+        optionally title section.
         """
-        tRefs = {x: [] for x in nwKeyWords.VALID_KEYS}
+        refs = {x: [] for x in nwKeyWords.VALID_KEYS}
         for rTitle, hItem in self._itemIndex.iterItemHeaders(tHandle):
             if sTitle is None or sTitle == rTitle:
                 for aTag, refTypes in hItem.references.items():
                     for refType in refTypes:
-                        if refType in tRefs:
-                            tRefs[refType].append(self._tagsIndex.tagName(aTag))
-        return tRefs
+                        if refType in refs:
+                            refs[refType].append(self._tagsIndex.tagName(aTag))
+                if tag := hItem.tag:
+                    refs[nwKeyWords.TAG_KEY] = [self._tagsIndex.tagName(tag)]
+        return refs
 
     def getReferenceForHeader(self, tHandle: str, nHead: int, keyClass: str) -> list[str]:
         """Get the display names for a tags class for insertion into a
@@ -753,10 +762,12 @@ class Index:
         """Return all tags used by a specific document."""
         return self._itemIndex.allItemTags(tHandle) if tHandle else []
 
-    def getClassTags(self, itemClass: nwItemClass | None) -> list[str]:
-        """Return all tags based on itemClass."""
-        name = None if itemClass is None else itemClass.name
-        return self._tagsIndex.filterTagNames(name)
+    def getKeyWordTags(self, keyWord: str) -> list[str]:
+        """Return all tags usable for a specific keyword."""
+        if keyWord in nwKeyWords.CAN_LOOKUP:
+            itemClass = nwKeyWords.KEY_CLASS.get(keyWord)
+            return self._tagsIndex.filterTagNames(itemClass.name if itemClass else None)
+        return []
 
     def getTagsData(
         self, activeOnly: bool = True

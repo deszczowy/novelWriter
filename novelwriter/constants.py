@@ -28,7 +28,8 @@ from typing import Final
 from PyQt6.QtCore import QT_TRANSLATE_NOOP, QCoreApplication
 
 from novelwriter.enum import (
-    nwBuildFmt, nwComment, nwItemClass, nwItemLayout, nwOutline, nwStatusShape
+    nwBuildFmt, nwComment, nwItemClass, nwItemLayout, nwOutline, nwStatusShape,
+    nwTheme
 )
 
 
@@ -76,6 +77,7 @@ class nwRegEx:
     FMT_EI = r"(?<![\w\\])(_)(?![\s_])(.+?)(?<![\s\\])(\1)(?!\w)"
     FMT_EB = r"(?<![\w\\])(\*{2})(?![\s\*])(.+?)(?<![\s\\])(\1)(?!\w)"
     FMT_ST = r"(?<![\w\\])(~{2})(?![\s~])(.+?)(?<![\s\\])(\1)(?!\w)"
+    FMT_HL = r"(?<![\w\\])(={2})(?![\s=])(.+?)(?<![\s\\])(\1)(?!\w)"
     FMT_SC = r"(?i)(?<!\\)(\[(?:b|/b|i|/i|s|/s|u|/u|m|/m|sup|/sup|sub|/sub|br)\])"
     FMT_SV = r"(?i)(?<!\\)(\[(?:footnote|field):)(.+?)(?<!\\)(\])"
 
@@ -183,6 +185,10 @@ class nwKeyWords:
     CAN_CREATE: Final[list[str]] = [
         POV_KEY, FOCUS_KEY, CHAR_KEY, PLOT_KEY, TIME_KEY, WORLD_KEY,
         OBJECT_KEY, ENTITY_KEY, CUSTOM_KEY,
+    ]
+    CAN_LOOKUP: Final[list[str]] = [
+        POV_KEY, FOCUS_KEY, CHAR_KEY, PLOT_KEY, TIME_KEY, WORLD_KEY,
+        OBJECT_KEY, ENTITY_KEY, CUSTOM_KEY, STORY_KEY, MENTION_KEY,
     ]
 
     # Set of Valid Keys
@@ -442,16 +448,26 @@ class nwLabels:
         "Custom": (-1.0, -1.0),
     }
     THEME_COLORS: Final[dict[str, str]] = {
-        "theme":   QT_TRANSLATE_NOOP("Constant", "Theme Colours"),
         "default": QT_TRANSLATE_NOOP("Constant", "Foreground Colour"),
+        "base":    QT_TRANSLATE_NOOP("Constant", "Background Colour"),
         "faded":   QT_TRANSLATE_NOOP("Constant", "Faded Colour"),
         "red":     QT_TRANSLATE_NOOP("Constant", "Red"),
         "orange":  QT_TRANSLATE_NOOP("Constant", "Orange"),
         "yellow":  QT_TRANSLATE_NOOP("Constant", "Yellow"),
         "green":   QT_TRANSLATE_NOOP("Constant", "Green"),
-        "aqua":    QT_TRANSLATE_NOOP("Constant", "Aqua"),
+        "cyan":    QT_TRANSLATE_NOOP("Constant", "Cyan"),
         "blue":    QT_TRANSLATE_NOOP("Constant", "Blue"),
         "purple":  QT_TRANSLATE_NOOP("Constant", "Purple"),
+    }
+    THEME_MODE_ICON: Final[dict[nwTheme, str]] = {
+        nwTheme.AUTO:  "theme_auto",
+        nwTheme.LIGHT: "theme_light",
+        nwTheme.DARK:  "theme_dark",
+    }
+    THEME_MODE_LABEL: Final[dict[nwTheme, str]] = {
+        nwTheme.AUTO:  QT_TRANSLATE_NOOP("Constant", "System Theme"),
+        nwTheme.LIGHT: QT_TRANSLATE_NOOP("Constant", "Light Theme"),
+        nwTheme.DARK:  QT_TRANSLATE_NOOP("Constant", "Dark Theme"),
     }
 
 
@@ -582,20 +598,13 @@ class nwUnicode:
     U_TIMES  = "\u00d7"  # Multiplication sign
     U_DIVIDE = "\u00f7"  # Division sign
 
-    # Arrows
-    U_UTRI   = "\u25b2"  # Up-pointing triangle
-    U_UTRIS  = "\u25b4"  # Up-pointing triangle, small
-    U_RTRI   = "\u25b6"  # Right-pointing triangle
-    U_RTRIS  = "\u25b8"  # Right-pointing triangle, small
-    U_DTRI   = "\u25bc"  # Down-pointing triangle
-    U_DTRIS  = "\u25be"  # Down-pointing triangle, small
-    U_LTRI   = "\u25c0"  # Left-pointing triangle
-    U_LTRIS  = "\u25c2"  # Left-pointing triangle, small
-
     # Special
     U_UNKN   = "\ufffd"  # Unknown character
     U_NAC1   = "\ufffe"  # Not a character
     U_NAC2   = "\uffff"  # Not a character
+
+    # Placeholders
+    U_LBREAK = "\u21b2"  # Downwards Arrow With Tip Leftwards
 
     # HTML Equivalents
     # ================
@@ -651,15 +660,15 @@ class nwUnicode:
     H_TIMES  = "&times;"
     H_DIVIDE = "&divide;"
 
-    # Arrows
-    H_UTRI   = "&#9650;"
-    H_UTRIS  = "&#9652;"
-    H_RTRI   = "&#9654;"
-    H_RTRIS  = "&#9656;"
-    H_DTRI   = "&#9660;"
-    H_DTRIS  = "&#9662;"
-    H_LTRI   = "&#9664;"
-    H_LTRIS  = "&#9666;"
+    # Unicode symbols expected to be used on the UI
+    UI_SYMBOLS: Final[list[str]] = [
+        U_QUOT, U_APOS, U_LAQUO, U_RAQUO, U_LSQUO, U_RSQUO, U_SBQUO, U_SUQUO,
+        U_LDQUO, U_RDQUO, U_BDQUO, U_UDQUO, U_LSAQUO, U_RSAQUO, U_BDRQUO,
+        U_LCQUO, U_RCQUO, U_LWCQUO, U_RWCQUO, U_FGDASH, U_ENDASH, U_EMDASH,
+        U_HBAR, U_HELLIP, U_MAPOS, U_PRIME, U_DPRIME, U_NBSP, U_THSP, U_THNBSP,
+        U_ENSP, U_EMSP, U_MMSP, U_CHECK, U_CROSS, U_BULL, U_TRBULL, U_HYBULL,
+        U_FLOWER, U_PERMIL, U_DEGREE, U_MINUS, U_TIMES, U_DIVIDE, U_LBREAK,
+    ]
 
 
 class nwHtmlUnicode:

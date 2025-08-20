@@ -37,8 +37,8 @@ from PyQt6.QtCore import QMargins, QSize
 from novelwriter import __version__
 from novelwriter.common import firstFloat, xmlElement, xmlSubElem
 from novelwriter.constants import nwHeadFmt, nwStyles
-from novelwriter.formats.shared import BlockFmt, BlockTyp, T_Formats, TextFmt
-from novelwriter.formats.tokenizer import Tokenizer
+from novelwriter.formats.shared import BlockFmt, BlockTyp, T_Formats, TextFmt, stripEscape
+from novelwriter.formats.tokenizer import COMMENT_BLOCKS, Tokenizer
 from novelwriter.types import QtHexRgb
 
 if TYPE_CHECKING:
@@ -51,7 +51,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 # RegEx
-RX_TEXT = re.compile(r"([\n\t])", re.UNICODE)
+RX_TEXT = re.compile(r"([\n\t])")
 
 # Types and Relationships
 OOXML_SCM = "http://schemas.openxmlformats.org"
@@ -296,7 +296,7 @@ class ToDocX(Tokenizer):
             elif tType == BlockTyp.SKIP:
                 self._processFragments(par, S_NORM, "")
 
-            elif tType == BlockTyp.COMMENT:
+            elif tType in COMMENT_BLOCKS:
                 self._processFragments(par, S_META, tText, tFormat)
 
             elif tType == BlockTyp.KEYWORD:
@@ -480,7 +480,7 @@ class ToDocX(Tokenizer):
             xmlSubElem(rPr, _wTag("color"), attrib={W_VAL: _docXCol(color)})
 
         if isinstance(text, str):
-            for segment in RX_TEXT.split(text):
+            for segment in RX_TEXT.split(stripEscape(text)):
                 if segment == "\n":
                     xmlSubElem(xR, _wTag("br"))
                 elif segment == "\t":

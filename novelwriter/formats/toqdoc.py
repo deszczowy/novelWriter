@@ -36,12 +36,13 @@ from PyQt6.QtPrintSupport import QPrinter
 
 from novelwriter import __version__
 from novelwriter.constants import nwStyles, nwUnicode
-from novelwriter.formats.shared import BlockFmt, BlockTyp, T_Formats, TextFmt
-from novelwriter.formats.tokenizer import HEADINGS, Tokenizer
+from novelwriter.formats.shared import BlockFmt, BlockTyp, T_Formats, TextFmt, stripEscape
+from novelwriter.formats.tokenizer import HEADING_BLOCKS, META_BLOCKS, Tokenizer
 from novelwriter.types import (
     QtAlignAbsolute, QtAlignCenter, QtAlignJustify, QtAlignLeft, QtAlignRight,
-    QtKeepAnchor, QtMoveAnchor, QtPageBreakAfter, QtPageBreakBefore,
-    QtPropLineHeight, QtTransparent, QtVAlignNormal, QtVAlignSub, QtVAlignSuper
+    QtKeepAnchor, QtMoveAnchor, QtPageBreakAfter, QtPageBreakAuto,
+    QtPageBreakBefore, QtPropLineHeight, QtTransparent, QtVAlignNormal,
+    QtVAlignSub, QtVAlignSuper
 )
 
 if TYPE_CHECKING:
@@ -213,7 +214,7 @@ class ToQTextDocument(Tokenizer):
         for tType, tMeta, tText, tFormat, tStyle in self._blocks:
 
             bFmt = QTextBlockFormat(self._blockFmt)
-            if tType in (BlockTyp.COMMENT, BlockTyp.KEYWORD):
+            if tType in META_BLOCKS:
                 bFmt.setTopMargin(self._mMeta[0])
                 bFmt.setBottomMargin(self._mMeta[1])
             elif tType == BlockTyp.SEP:
@@ -247,14 +248,20 @@ class ToQTextDocument(Tokenizer):
             if tStyle & BlockFmt.IND_T:
                 bFmt.setTextIndent(self._tIndent)
 
-            if tType in (BlockTyp.TEXT, BlockTyp.COMMENT, BlockTyp.KEYWORD):
+            if tType == BlockTyp.TEXT:
                 newBlock(cursor, bFmt)
                 self._insertFragments(tText, tFormat, cursor, self._charFmt)
 
-            elif tType in HEADINGS:
+            elif tType in HEADING_BLOCKS:
                 bFmt, cFmt = self._genHeadStyle(tType, tMeta, bFmt)
+                for tPart in tText.split("\n"):
+                    newBlock(cursor, bFmt)
+                    cursor.insertText(tPart, cFmt)
+                    bFmt.setPageBreakPolicy(QtPageBreakAuto)
+
+            elif tType in META_BLOCKS:
                 newBlock(cursor, bFmt)
-                cursor.insertText(tText, cFmt)
+                self._insertFragments(tText, tFormat, cursor, self._charFmt)
 
             elif tType == BlockTyp.SEP:
                 newBlock(cursor, bFmt)
@@ -343,7 +350,7 @@ class ToQTextDocument(Tokenizer):
         for pos, fmt, data in tFmt:
 
             # Insert buffer with previous format
-            cursor.insertText(temp[start:pos], cFmt)
+            cursor.insertText(stripEscape(temp[start:pos]), cFmt)
 
             # Construct next format
             if fmt == TextFmt.B_B:
@@ -425,13 +432,12 @@ class ToQTextDocument(Tokenizer):
                 if field := data.partition(":")[2]:
                     self._usedFields.append((cursor.position(), field))
                     cursor.insertText("0", cFmt)
-                pass
 
             # Move pos for next pass
             start = pos
 
         # Insert whatever is left in the buffer
-        cursor.insertText(temp[start:], cFmt)
+        cursor.insertText(stripEscape(temp[start:]), cFmt)
 
         return
 

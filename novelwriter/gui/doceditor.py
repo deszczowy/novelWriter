@@ -45,11 +45,11 @@ from PyQt6.QtCore import (
 from PyQt6.QtGui import (
     QAction, QCursor, QDragEnterEvent, QDragMoveEvent, QDropEvent, QKeyEvent,
     QKeySequence, QMouseEvent, QPalette, QPixmap, QResizeEvent, QShortcut,
-    QTextBlock, QTextCursor, QTextDocument, QTextOption
+    QTextBlock, QTextCursor, QTextDocument, QTextFormat, QTextOption
 )
 from PyQt6.QtWidgets import (
     QApplication, QFrame, QGridLayout, QHBoxLayout, QLabel, QLineEdit, QMenu,
-    QPlainTextEdit, QToolBar, QVBoxLayout, QWidget
+    QPlainTextEdit, QTextEdit, QToolBar, QVBoxLayout, QWidget
 )
 
 from novelwriter import CONFIG, SHARED
@@ -75,7 +75,8 @@ from novelwriter.tools.lipsum import GuiLipsum
 from novelwriter.types import (
     QtAlignCenterTop, QtAlignJustify, QtAlignLeft, QtAlignLeftTop,
     QtAlignRight, QtKeepAnchor, QtModCtrl, QtModNone, QtModShift, QtMouseLeft,
-    QtMoveAnchor, QtMoveLeft, QtMoveRight, QtScrollAlwaysOff, QtScrollAsNeeded
+    QtMoveAnchor, QtMoveLeft, QtMoveRight, QtScrollAlwaysOff, QtScrollAsNeeded,
+    QtTransparent
 )
 
 logger = logging.getLogger(__name__)
@@ -145,6 +146,8 @@ class GuiDocEditor(QPlainTextEdit):
         self._lastActive = 0.0    # Timestamp of last activity
         self._lastFind   = None   # Position of the last found search word
         self._doReplace  = False  # Switch to temporarily disable auto-replace
+        self._lineColor  = QtTransparent
+        self._selection  = QTextEdit.ExtraSelection()
 
         # Auto-Replace
         self._autoReplace = TextAutoReplace()
@@ -283,6 +286,7 @@ class GuiDocEditor(QPlainTextEdit):
         self.docHeader.clearHeader()
         self.docFooter.setHandle(self._docHandle)
         self.docToolBar.setVisible(False)
+        self.setExtraSelections([])
 
         self.itemHandleChanged.emit("")
 
@@ -314,6 +318,10 @@ class GuiDocEditor(QPlainTextEdit):
 
         self.docHeader.matchColors()
         self.docFooter.matchColors()
+
+        self._lineColor = syntax.line
+        self._selection.format.setBackground(self._lineColor)
+        self._selection.format.setProperty(QTextFormat.Property.FullWidthSelection, True)
 
         return
 
@@ -372,6 +380,8 @@ class GuiDocEditor(QPlainTextEdit):
         # Refresh sizes
         self.setTabStopDistance(CONFIG.tabWidth)
         self.setCursorWidth(CONFIG.cursorWidth)
+        self.setExtraSelections([])
+        self._cursorMoved()
 
         # If we have a document open, we should refresh it in case the
         # font changed, otherwise we just clear the editor entirely,
@@ -733,6 +743,8 @@ class GuiDocEditor(QPlainTextEdit):
             self._toggleFormat(2, "*")
         elif action == nwDocAction.MD_STRIKE:
             self._toggleFormat(2, "~")
+        elif action == nwDocAction.MD_MARK:
+            self._toggleFormat(2, "=")
         elif action == nwDocAction.S_QUOTE:
             self._wrapSelection(CONFIG.fmtSQuoteOpen, CONFIG.fmtSQuoteClose)
         elif action == nwDocAction.D_QUOTE:
@@ -1090,11 +1102,14 @@ class GuiDocEditor(QPlainTextEdit):
                         show = self._completer.updateMetaText(text, bPos)
                     else:
                         show = self._completer.updateCommentText(text, bPos)
-                    point = self.cursorRect().bottomRight()
-                    self._completer.move(viewport.mapToGlobal(point))
-                    self._completer.setVisible(show)
+                    if show:
+                        point = self.cursorRect().bottomRight()
+                        self._completer.move(viewport.mapToGlobal(point))
+                        self._completer.show()
+                    else:
+                        self._completer.close()
             else:
-                self._completer.setVisible(False)
+                self._completer.close()
 
             if self._doReplace and added == 1:
                 cursor = self.textCursor()
@@ -1107,6 +1122,10 @@ class GuiDocEditor(QPlainTextEdit):
     def _cursorMoved(self) -> None:
         """Triggered when the cursor moved in the editor."""
         self.docFooter.updateLineCount(self.textCursor())
+        if CONFIG.lineHighlight:
+            self._selection.cursor = self.textCursor()
+            self._selection.cursor.clearSelection()
+            self.setExtraSelections([self._selection])
         return
 
     @pyqtSlot(int, int, str)
@@ -1183,13 +1202,13 @@ class GuiDocEditor(QPlainTextEdit):
 
         # Spell Checking
         if SHARED.project.data.spellCheck:
-            word, cPos, cLen, suggest = self._qDocument.spellErrorAtPos(pCursor.position())
-            if word and cPos >= 0 and cLen > 0:
+            word, offset, suggest = self._qDocument.spellErrorAtPos(pCursor.position())
+            if word and offset >= 0:
                 logger.debug("Word '%s' is misspelled", word)
                 block = pCursor.block()
                 sCursor = self.textCursor()
-                sCursor.setPosition(block.position() + cPos)
-                sCursor.movePosition(QtMoveRight, QtKeepAnchor, cLen)
+                sCursor.setPosition(block.position() + offset)
+                sCursor.movePosition(QtMoveRight, QtKeepAnchor, len(word))
                 if suggest:
                     ctxMenu.addSeparator()
                     qtAddAction(ctxMenu, self.tr("Spelling Suggestion(s)"))
@@ -2113,9 +2132,7 @@ class CommandCompleter(QMenu):
             length = len(lookup)
             suffix = ""
             options = sorted(filter(
-                lambda x: lookup in x.lower(), SHARED.project.index.getClassTags(
-                    nwKeyWords.KEY_CLASS.get(kw.strip())
-                )
+                lambda x: lookup in x.lower(), SHARED.project.index.getKeyWordTags(kw.strip())
             ))[:15]
 
         if not options:
@@ -2276,21 +2293,23 @@ class TextAutoReplace:
         """Auto-replace text elements based on main configuration.
         Returns True if anything was changed.
         """
-        pos = cursor.positionInBlock()
-        length = len(text)
-        if length < 1 or pos-1 > length:
+        aPos = cursor.position()
+        bPos = cursor.positionInBlock()
+        block = cursor.block()
+        length = block.length() - 1
+        if length < 1 or bPos-1 > length:
             return False
 
-        delete, insert = self._determine(text, pos)
-        if insert == "":
-            return False
+        cursor.movePosition(QtMoveLeft, QtKeepAnchor, min(4, bPos))
+        last = cursor.selectedText()
+        delete, insert = self._determine(last, bPos)
 
         check = insert
         if self._doPadBefore and check in self._padBefore:
             if not (check == ":" and length > 1 and text[0] == "@"):
                 delete = max(delete, 1)
-                chkPos = pos - delete - 1
-                if chkPos >= 0 and text[chkPos].isspace():
+                chkPos = len(last) - delete - 1
+                if chkPos >= 0 and last[chkPos].isspace():
                     # Strip existing space before inserting a new (#1061)
                     delete += 1
                 insert = self._padChar + insert
@@ -2301,6 +2320,7 @@ class TextAutoReplace:
                 insert = insert + self._padChar
 
         if delete > 0:
+            cursor.setPosition(aPos)
             cursor.movePosition(QtMoveLeft, QtKeepAnchor, delete)
             cursor.insertText(insert)
             return True
@@ -2309,42 +2329,55 @@ class TextAutoReplace:
 
     def _determine(self, text: str, pos: int) -> tuple[int, str]:
         """Determine what to replace, if anything."""
-        t1 = text[pos-1:pos]
-        t2 = text[pos-2:pos]
-        t3 = text[pos-3:pos]
-        t4 = text[pos-4:pos]
-        if t1 == "":
-            # Return early if there is nothing to check
-            return 0, ""
+        t1 = text[-1:]
+        t2 = text[-2:]
+        t3 = text[-3:]
+        t4 = text[-4:]
 
-        leading = t2[:1].isspace()
-        if self._replaceDQuote:
-            if leading and t2.endswith('"'):
+        if self._replaceDQuote and t1 == '"':
+            # Process Double Quote
+            if pos == 1:
                 return 1, self._quoteDO
-            elif t1 == '"':
-                if pos == 1:
-                    return 1, self._quoteDO
-                elif pos == 2 and t2 == '>"':
-                    return 1, self._quoteDO
-                elif pos == 3 and t3 == '>>"':
-                    return 1, self._quoteDO
-                else:
-                    return 1, self._quoteDC
+            elif t2[:1].isspace() and t2.endswith('"'):
+                return 1, self._quoteDO
+            elif pos == 2 and t2 == '>"':
+                return 1, self._quoteDO
+            elif pos == 3 and t3 == '>>"':
+                return 1, self._quoteDO
+            elif pos == 2 and t2 == '_"':
+                return 1, self._quoteDO
+            elif t3[:1].isspace() and t3.endswith('_"'):
+                return 1, self._quoteDO
+            elif pos == 3 and t3 in ('**"', '=="', '~~"'):
+                return 1, self._quoteDO
+            elif t4[:1].isspace() and t4.endswith(('**"', '=="', '~~"')):
+                return 1, self._quoteDO
+            else:
+                return 1, self._quoteDC
 
-        if self._replaceSQuote:
-            if leading and t2.endswith("'"):
+        if self._replaceSQuote and t1 == "'":
+            # Process Single Quote
+            if pos == 1:
                 return 1, self._quoteSO
-            elif t1 == "'":
-                if pos == 1:
-                    return 1, self._quoteSO
-                elif pos == 2 and t2 == ">'":
-                    return 1, self._quoteSO
-                elif pos == 3 and t3 == ">>'":
-                    return 1, self._quoteSO
-                else:
-                    return 1, self._quoteSC
+            elif t2[:1].isspace() and t2.endswith("'"):
+                return 1, self._quoteSO
+            elif pos == 2 and t2 == ">'":
+                return 1, self._quoteSO
+            elif pos == 3 and t3 == ">>'":
+                return 1, self._quoteSO
+            elif pos == 2 and t2 == "_'":
+                return 1, self._quoteSO
+            elif t3[:1].isspace() and t3.endswith("_'"):
+                return 1, self._quoteSO
+            elif pos == 3 and t3 in ("**'", "=='", "~~'"):
+                return 1, self._quoteSO
+            elif t4[:1].isspace() and t4.endswith(("**'", "=='", "~~'")):
+                return 1, self._quoteSO
+            else:
+                return 1, self._quoteSC
 
-        if self._replaceDash:
+        if self._replaceDash and t1 == "-":
+            # Process Dashes
             if t4 == "----":
                 return 4, "\u2015"  # Horizontal bar
             elif t3 == "---":
@@ -2357,6 +2390,7 @@ class TextAutoReplace:
                 return 2, "\u2015"  # Horizontal bar
 
         if self._replaceDots and t3 == "...":
+            # Process Dots
             return 3, "\u2026"  # Ellipsis
 
         if t1 == "\u2028":  # Line separator
@@ -2402,6 +2436,12 @@ class GuiDocToolBar(QWidget):
         self.tbStrikeMD.setToolTip(self.tr("Markdown Strikethrough"))
         self.tbStrikeMD.clicked.connect(
             qtLambda(self.requestDocAction.emit, nwDocAction.MD_STRIKE)
+        )
+
+        self.tbMarkMD = NIconToolButton(self, iSz)
+        self.tbMarkMD.setToolTip(self.tr("Markdown Highlight"))
+        self.tbMarkMD.clicked.connect(
+            qtLambda(self.requestDocAction.emit, nwDocAction.MD_MARK)
         )
 
         self.tbBold = NIconToolButton(self, iSz)
@@ -2453,6 +2493,7 @@ class GuiDocToolBar(QWidget):
         self.outerBox.addWidget(self.tbBoldMD)
         self.outerBox.addWidget(self.tbItalicMD)
         self.outerBox.addWidget(self.tbStrikeMD)
+        self.outerBox.addWidget(self.tbMarkMD)
         self.outerBox.addSpacing(4)
         self.outerBox.addWidget(self.tbBold)
         self.outerBox.addWidget(self.tbItalic)
@@ -2487,6 +2528,7 @@ class GuiDocToolBar(QWidget):
         self.tbBoldMD.setThemeIcon("fmt_bold", "orange")
         self.tbItalicMD.setThemeIcon("fmt_italic", "orange")
         self.tbStrikeMD.setThemeIcon("fmt_strike", "orange")
+        self.tbMarkMD.setThemeIcon("fmt_mark", "orange")
         self.tbBold.setThemeIcon("fmt_bold")
         self.tbItalic.setThemeIcon("fmt_italic")
         self.tbStrike.setThemeIcon("fmt_strike")

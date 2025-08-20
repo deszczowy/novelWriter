@@ -160,6 +160,10 @@ class DocSplitter:
 
         return
 
+    def __len__(self) -> int:
+        """The length of the split job."""
+        return len(self._rawData)
+
     ##
     #  Methods
     ##
@@ -270,7 +274,9 @@ class DocDuplicator:
         after = True
         if items:
             hMap: dict[str, str | None] = {t: None for t in items}
+            SHARED.initMainProgress(len(items))
             for tHandle in items:
+                SHARED.incMainProgress()
                 if oldItem := self._project.tree[tHandle]:
                     pHandle = hMap.get(oldItem.itemParent or "") or oldItem.itemParent
                     if newItem := self._project.tree.duplicate(tHandle, pHandle, after):
@@ -282,6 +288,7 @@ class DocDuplicator:
                     after = False
                 else:
                     break
+            SHARED.clearMainProgress()
         return result
 
 
@@ -289,7 +296,7 @@ class DocSearch:
 
     def __init__(self) -> None:
         self._regEx = re.compile(r"")
-        self._opts = re.UNICODE | re.IGNORECASE
+        self._opts = re.IGNORECASE
         self._words = False
         self._escape = True
         return
@@ -300,9 +307,7 @@ class DocSearch:
 
     def setCaseSensitive(self, state: bool) -> None:
         """Set the case sensitive search flag."""
-        self._opts = re.UNICODE
-        if not state:
-            self._opts |= re.IGNORECASE
+        self._opts = 0 if state else re.IGNORECASE
         return
 
     def setWholeWords(self, state: bool) -> None:
@@ -322,10 +327,13 @@ class DocSearch:
         self._regEx = re.compile(self._buildPattern(search), self._opts)
         logger.debug("Searching with pattern '%s'", self._regEx.pattern)
         storage = project.storage
+        SHARED.initMainProgress(len(project.tree))
         for item in project.tree:
+            SHARED.incMainProgress()
             if item.isFileType():
                 results, capped = self.searchText(storage.getDocumentText(item.itemHandle))
                 yield item, results, capped
+        SHARED.clearMainProgress()
         return
 
     def searchText(self, text: str) -> tuple[list[tuple[int, int, str]], bool]:
@@ -609,6 +617,7 @@ class ProjectBuilder:
         project.data.setSaveCount(0)
         project.data.setAutoCount(0)
         project.data.setEditTime(0)
+        project.index.rebuild()
         project.saveProject()
         project.closeProject()
         return

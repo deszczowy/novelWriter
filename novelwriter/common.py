@@ -31,6 +31,7 @@ import xml.etree.ElementTree as ET
 
 from configparser import ConfigParser
 from datetime import datetime
+from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, TypeGuard, TypeVar
 from urllib.parse import urljoin
@@ -493,6 +494,21 @@ def decodeMimeHandles(mimeData: QMimeData) -> list[str]:
     return mimeData.data(nwConst.MIME_HANDLE).data().decode().split("|")
 
 
+def utf16CharMap(text: str) -> list[int]:
+    """Compute mapping from Python string index to QString index.
+    Python strings are always one character per position in either
+    ASCII, UCS-2 or UCS-4. QStrings are in UTF-16, so wide characters
+    use 2 indices, and thus create an offset.
+    """
+    utf16Map = list(range(0, len(text) + 1))
+    offset = 0
+    for i, c in enumerate(text, 1):
+        if ord(c) > 0xffff:
+            offset += 1
+        utf16Map[i] = i + offset
+    return utf16Map
+
+
 ##
 #  Encoder Functions
 ##
@@ -676,15 +692,19 @@ def openExternalPath(path: Path) -> bool:
 #  Classes
 ##
 
+_T_Enum = TypeVar("_T_Enum", bound=Enum)
+
+
 class NWConfigParser(ConfigParser):
     """Common: Adapted Config Parser
 
     This is a subclass of the standard config parser that adds type safe
-    helper functions, and support for lists.
+    helper functions, and support for lists. It also turns off
+    interpolation, which would require % symbols to be escaped (#2455).
     """
 
     def __init__(self) -> None:
-        super().__init__()
+        super().__init__(interpolation=None)
         return
 
     def rdStr(self, section: str, option: str, default: str) -> str:
@@ -736,3 +756,10 @@ class NWConfigParser(ConfigParser):
             for i in range(min(len(data), len(result))):
                 result[i] = checkInt(data[i].strip(), result[i])
         return result
+
+    def rdEnum(self, section: str, option: str, default: _T_Enum) -> _T_Enum:
+        """Read enum value."""
+        if self.has_option(section, option):
+            data = self.get(section, option, fallback="")
+            return type(default).__members__.get(data.upper(), default)
+        return default

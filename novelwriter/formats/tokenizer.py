@@ -71,11 +71,23 @@ COMMENT_STYLE = {
     nwComment.COMMENT:  ComStyle(),
     nwComment.STORY:    ComStyle("Story Structure", "modifier", "note"),
 }
-HEADINGS = [
+COMMENT_TYPE = {
+    nwComment.PLAIN:    BlockTyp.COMMENT,
+    nwComment.IGNORE:   BlockTyp.COMMENT,
+    nwComment.SYNOPSIS: BlockTyp.SUMMARY,
+    nwComment.SHORT:    BlockTyp.SUMMARY,
+    nwComment.NOTE:     BlockTyp.NOTE,
+    nwComment.FOOTNOTE: BlockTyp.COMMENT,
+    nwComment.COMMENT:  BlockTyp.COMMENT,
+    nwComment.STORY:    BlockTyp.NOTE,
+}
+HEADING_BLOCKS = [
     BlockTyp.TITLE, BlockTyp.PART, BlockTyp.HEAD1,
     BlockTyp.HEAD2, BlockTyp.HEAD3, BlockTyp.HEAD4,
 ]
-SKIP_INDENT = [*HEADINGS, BlockTyp.SEP, BlockTyp.SKIP]
+COMMENT_BLOCKS = (BlockTyp.COMMENT, BlockTyp.SUMMARY, BlockTyp.NOTE)
+META_BLOCKS = (BlockTyp.COMMENT, BlockTyp.SUMMARY, BlockTyp.NOTE, BlockTyp.KEYWORD)
+SKIP_INDENT = [*HEADING_BLOCKS, BlockTyp.SEP, BlockTyp.SKIP]
 B_EMPTY: T_Block = (BlockTyp.EMPTY, "", "", [], BlockFmt.NONE)
 
 
@@ -189,6 +201,7 @@ class Tokenizer(ABC):
             (REGEX_PATTERNS.markdownItalic, [0, TextFmt.I_B, 0, TextFmt.I_E]),
             (REGEX_PATTERNS.markdownBold,   [0, TextFmt.B_B, 0, TextFmt.B_E]),
             (REGEX_PATTERNS.markdownStrike, [0, TextFmt.D_B, 0, TextFmt.D_E]),
+            (REGEX_PATTERNS.markdownMark,   [0, TextFmt.M_B, 0, TextFmt.M_E]),
         ]
 
         self._shortCodeFmt = {
@@ -495,12 +508,10 @@ class Tokenizer(ABC):
     def doPreProcessing(self) -> None:
         """Run pre-processing jobs before the text is tokenized."""
         # Process the user's auto-replace dictionary
-        if autoReplace := self._project.data.autoReplace:
-            repDict = {}
-            for aKey, aVal in autoReplace.items():
-                repDict[f"<{aKey}>"] = aVal
-            xRep = re.compile("|".join([re.escape(k) for k in repDict.keys()]), flags=re.DOTALL)
-            self._text = xRep.sub(lambda x: repDict[x.group(0)], self._text)
+        if entry := self._project.data.autoReplace:
+            replace = {f"<{k}>": v for k, v in entry.items()}
+            rxRep = re.compile("|".join([re.escape(k) for k in replace]), flags=re.DOTALL)
+            self._text = rxRep.sub(lambda x: replace[x.group(0)], self._text)
         return
 
     def tokenizeText(self) -> None:
@@ -620,7 +631,7 @@ class Tokenizer(ABC):
                     bStyle = COMMENT_STYLE[cStyle]
                     tLine, tFmt = self._formatComment(bStyle, cKey, cText)
                     tBlocks.append((
-                        BlockTyp.COMMENT, "", tLine, tFmt, tStyle
+                        COMMENT_TYPE[cStyle], "", tLine, tFmt, tStyle
                     ))
 
                 elif cStyle == nwComment.FOOTNOTE:
@@ -864,12 +875,12 @@ class Tokenizer(ABC):
                 # We don't need to keep the empty lines after this pass
                 pass
 
-            elif cBlock[0] == BlockTyp.KEYWORD:
-                # Adjust margins for lines in a list of keyword lines
+            elif cBlock[0] in (BlockTyp.KEYWORD, BlockTyp.NOTE):
+                # Adjust margins for lines in repeated meta blocks
                 aStyle = cBlock[4]
-                if pBlock[0] == BlockTyp.KEYWORD:
+                if pBlock[0] == cBlock[0]:
                     aStyle |= BlockFmt.Z_TOP
-                if nBlock[0] == BlockTyp.KEYWORD:
+                if nBlock[0] == cBlock[0]:
                     aStyle |= BlockFmt.Z_BTM
                 sBlocks.append((
                     cBlock[0], cBlock[1], cBlock[2], cBlock[3], aStyle
@@ -882,31 +893,21 @@ class Tokenizer(ABC):
                 if nBlock[0] != BlockTyp.TEXT:
                     # Next block is not text, so we add the buffer to blocks
                     nLines = len(pLines)
-                    cStyle = pLines[0][4]
-                    if firstIndent and not (self._noIndent or cStyle & BlockFmt.ALIGNED):
-                        # If paragraph indentation is enabled, not temporarily
-                        # turned off, and the block is not aligned, we add the
-                        # text indentation flag
-                        cStyle |= BlockFmt.IND_T
+                    tFmt: T_Formats = []
+                    pTxt = ""
+                    cStyle = BlockFmt.NONE
 
                     if nLines == 1:
-                        # The paragraph contains a single line, so we just save
-                        # that directly to the blocks list. If justify is
-                        # enabled, and there is no alignment, we apply it.
-                        if doJustify and not cStyle & BlockFmt.ALIGNED:
-                            cStyle |= BlockFmt.JUSTIFY
-
+                        # The paragraph contains a single line
+                        tFmt = pLines[0][3]
                         pTxt = pLines[0][2].translate(transMapB)
-                        sBlocks.append((
-                            BlockTyp.TEXT, pLines[0][1], pTxt, pLines[0][3], cStyle
-                        ))
+                        cStyle = pLines[0][4]
 
                     elif nLines > 1:
                         # The paragraph contains multiple lines, so we need to
                         # join them according to the line break policy, and
                         # recompute all the formatting markers
                         tTxt = ""
-                        tFmt: T_Formats = []
                         for aBlock in pLines:
                             tLen = len(tTxt)
                             tTxt += f"{aBlock[2]}{lineSep}"
@@ -914,6 +915,18 @@ class Tokenizer(ABC):
                             cStyle |= aBlock[4]
 
                         pTxt = tTxt[:-1].translate(transMapB)
+
+                    if nLines:
+                        isAligned = cStyle & BlockFmt.ALIGNED
+                        if firstIndent and not (self._noIndent or isAligned):
+                            # If paragraph indentation is enabled, not temporarily
+                            # turned off, and the block is not aligned, we add the
+                            # text indentation flag
+                            cStyle |= BlockFmt.IND_T
+
+                        if doJustify and not isAligned:
+                            cStyle |= BlockFmt.JUSTIFY
+
                         sBlocks.append((
                             BlockTyp.TEXT, pLines[0][1], pTxt, tFmt, cStyle
                         ))
@@ -991,7 +1004,7 @@ class Tokenizer(ABC):
                 allWordChars += nPWChars
                 textWordChars += nPWChars
 
-            elif tType in HEADINGS:
+            elif tType in HEADING_BLOCKS:
                 titleCount += 1
                 allWords += nWords
                 titleWords += nWords
@@ -1005,7 +1018,7 @@ class Tokenizer(ABC):
                 allChars += nChars
                 allWordChars += nWChars
 
-            elif tType in (BlockTyp.COMMENT, BlockTyp.KEYWORD):
+            elif tType in META_BLOCKS:
                 words = tText.split()
                 allWords += len(words)
                 allChars += len(tText)
@@ -1170,12 +1183,18 @@ class Tokenizer(ABC):
 
 class HeadingFormatter:
 
-    def __init__(self, project: NWProject) -> None:
+    def __init__(
+        self,
+        project: NWProject,
+        chapter: int = 0,
+        scene: int = 0,
+        absolute: int = 0,
+    ) -> None:
         self._project = project
         self._handle = None
-        self._chCount = 0
-        self._scChCount = 0
-        self._scAbsCount = 0
+        self._chapter = chapter
+        self._scene = scene
+        self._absolute = absolute
         return
 
     def setHandle(self, tHandle: str | None) -> None:
@@ -1185,42 +1204,42 @@ class HeadingFormatter:
 
     def incChapter(self) -> None:
         """Increment the chapter counter."""
-        self._chCount += 1
+        self._chapter += 1
         return
 
     def incScene(self) -> None:
         """Increment the scene counters."""
-        self._scChCount += 1
-        self._scAbsCount += 1
+        self._scene += 1
+        self._absolute += 1
         return
 
     def resetAll(self) -> None:
         """Reset all counters."""
-        self._chCount = 0
-        self._scChCount = 0
-        self._scAbsCount = 0
+        self._chapter = 0
+        self._scene = 0
+        self._absolute = 0
         return
 
     def resetScene(self) -> None:
         """Reset the chapter scene counter."""
-        self._scChCount = 0
+        self._scene = 0
         return
 
     def apply(self, hFormat: str, text: str, nHead: int) -> str:
         """Apply formatting to a specific heading."""
         hFormat = hFormat.replace(nwHeadFmt.TITLE, text)
         hFormat = hFormat.replace(nwHeadFmt.BR, "\n")
-        hFormat = hFormat.replace(nwHeadFmt.CH_NUM, str(self._chCount))
-        hFormat = hFormat.replace(nwHeadFmt.SC_NUM, str(self._scChCount))
-        hFormat = hFormat.replace(nwHeadFmt.SC_ABS, str(self._scAbsCount))
+        hFormat = hFormat.replace(nwHeadFmt.CH_NUM, str(self._chapter))
+        hFormat = hFormat.replace(nwHeadFmt.SC_NUM, str(self._scene))
+        hFormat = hFormat.replace(nwHeadFmt.SC_ABS, str(self._absolute))
         if nwHeadFmt.CH_WORD in hFormat:
-            chWord = self._project.localLookup(self._chCount)
+            chWord = self._project.localLookup(self._chapter)
             hFormat = hFormat.replace(nwHeadFmt.CH_WORD, chWord)
         if nwHeadFmt.CH_ROML in hFormat:
-            chRom = numberToRoman(self._chCount, toLower=True)
+            chRom = numberToRoman(self._chapter, toLower=True)
             hFormat = hFormat.replace(nwHeadFmt.CH_ROML, chRom)
         if nwHeadFmt.CH_ROMU in hFormat:
-            chRom = numberToRoman(self._chCount, toLower=False)
+            chRom = numberToRoman(self._chapter, toLower=False)
             hFormat = hFormat.replace(nwHeadFmt.CH_ROMU, chRom)
 
         if nwHeadFmt.CHAR_POV in hFormat or nwHeadFmt.CHAR_FOCUS in hFormat:

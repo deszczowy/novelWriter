@@ -30,7 +30,7 @@ from datetime import datetime
 from pathlib import Path
 from time import time
 
-from PyQt6.QtCore import Qt, QTimer, pyqtSlot
+from PyQt6.QtCore import QEvent, Qt, QTimer, pyqtSlot
 from PyQt6.QtGui import QCloseEvent, QCursor, QIcon, QShortcut
 from PyQt6.QtWidgets import (
     QApplication, QFileDialog, QHBoxLayout, QMainWindow, QMessageBox,
@@ -38,13 +38,14 @@ from PyQt6.QtWidgets import (
 )
 
 from novelwriter import CONFIG, SHARED, __hexversion__, __version__
-from novelwriter.common import formatFileFilter, formatVersion, hexToInt
+from novelwriter.common import formatFileFilter, formatVersion, hexToInt, minmax
 from novelwriter.constants import nwConst
 from novelwriter.dialogs.about import GuiAbout
 from novelwriter.dialogs.preferences import GuiPreferences
 from novelwriter.dialogs.projectsettings import GuiProjectSettings
 from novelwriter.dialogs.wordlist import GuiWordList
 from novelwriter.enum import nwDocAction, nwDocInsert, nwDocMode, nwFocus, nwItemType, nwView
+from novelwriter.extensions.progressbars import NProgressSimple
 from novelwriter.gui.doceditor import GuiDocEditor
 from novelwriter.gui.docviewer import GuiDocViewer
 from novelwriter.gui.docviewerpanel import GuiDocViewerPanel
@@ -69,14 +70,10 @@ logger = logging.getLogger(__name__)
 class GuiMain(QMainWindow):
     """Main GUI Window
 
-    The Main GUI window class. It is the entry point of the
-    application, and holds all runtime objects aside from the main
-    Config instance, which is created before the Main GUI.
-
-    The Main GUI is split up into GUI components, assembled in the init
-    function. Also, the project instance and theme instance are created
-    here. These should be passed around to all other objects who need
-    them and new instances of them should generally not be created.
+    The Main GUI window class is the entry point of the application. It
+    is split up into GUI components, assembled in the init function.
+    Tools and dialog windows are created on demand, but may be cached by
+    the Qt library and reused unless explicitly freed after use.
     """
 
     def __init__(self) -> None:
@@ -103,7 +100,7 @@ class GuiMain(QMainWindow):
         SHARED.initSharedData(self)
 
         # Prepare Main Window
-        self.resize(*CONFIG.mainWinSize)
+        self._setWindowSize(CONFIG.mainWinSize)
         self._updateWindowTitle()
 
         nwIcon = CONFIG.assetPath("icons") / "novelwriter.svg"
@@ -169,9 +166,9 @@ class GuiMain(QMainWindow):
         self.splitMain.addWidget(self.splitDocs)
         self.splitMain.setOpaqueResize(False)
         self.splitMain.setHandleWidth(4)
-        self.splitMain.setSizes(CONFIG.mainPanePos)
+        self.splitMain.setSizes([max(s, 100) for s in CONFIG.mainPanePos])
         self.splitMain.setCollapsible(0, False)
-        self.splitMain.setCollapsible(0, False)
+        self.splitMain.setCollapsible(1, False)
         self.splitMain.setStretchFactor(1, 0)
         self.splitMain.setStretchFactor(1, 1)
 
@@ -185,6 +182,10 @@ class GuiMain(QMainWindow):
         self.splitView.setVisible(False)
         self.docEditor.closeSearch()
 
+        # Progress Bar
+        self.mainProgress = NProgressSimple(self)
+        self.mainProgress.setFixedHeight(2)
+
         # Assemble Main Window Elements
         self.mainBox = QHBoxLayout()
         self.mainBox.addWidget(self.sideBar)
@@ -192,8 +193,14 @@ class GuiMain(QMainWindow):
         self.mainBox.setContentsMargins(0, 0, 0, 0)
         self.mainBox.setSpacing(0)
 
+        self.outerBox = QVBoxLayout()
+        self.outerBox.addLayout(self.mainBox)
+        self.outerBox.addWidget(self.mainProgress)
+        self.outerBox.setContentsMargins(0, 0, 0, 0)
+        self.outerBox.setSpacing(0)
+
         self.mainWidget = QWidget(self)
-        self.mainWidget.setLayout(self.mainBox)
+        self.mainWidget.setLayout(self.outerBox)
 
         self.setMenuBar(self.mainMenu)
         self.setCentralWidget(self.mainWidget)
@@ -902,9 +909,45 @@ class GuiMain(QMainWindow):
 
         return not self.splitView.isVisible()
 
+    def checkThemeUpdate(self) -> None:
+        """Load theme if mode changed."""
+        if SHARED.theme.loadTheme():
+            self.refreshThemeColors(syntax=True)
+            self.docEditor.initEditor()
+            self.docViewer.initViewer()
+        return
+
+    def refreshThemeColors(self, syntax: bool = False, force: bool = False) -> None:
+        """Refresh the GUI theme."""
+        SHARED.theme.loadTheme(force=force)
+        SHARED.project.updateTheme()
+        self.setPalette(QApplication.palette())
+        self.docEditor.updateTheme()
+        self.docViewer.updateTheme()
+        self.docViewerPanel.updateTheme()
+        self.sideBar.updateTheme()
+        self.projView.updateTheme()
+        self.novelView.updateTheme()
+        self.projSearch.updateTheme()
+        self.outlineView.updateTheme()
+        self.itemDetails.updateTheme()
+        self.mainStatus.updateTheme()
+        SHARED.project.tree.refreshAllItems()
+
+        if syntax:
+            self.docEditor.updateSyntaxColors()
+
+        return
+
     ##
     #  Events
     ##
+
+    def changeEvent(self, event: QEvent) -> None:
+        """Capture application change events."""
+        if int(event.type()) == 210:  # ThemeChange
+            self.checkThemeUpdate()
+        return
 
     def closeEvent(self, event: QCloseEvent) -> None:
         """Capture the closing event of the GUI and call the close
@@ -1017,16 +1060,16 @@ class GuiMain(QMainWindow):
             fP = self.projView.treeHasFocus()
             fN = self.novelView.treeHasFocus()
 
-            self._changeView(nwView.EDITOR)
+            self._changeView(nwView.EDITOR, exitFocus=True)
             if (vM and ((vP and fP) or (vN and not fN))) or (not vM and vN):
-                self._changeView(nwView.NOVEL)
+                self._changeView(nwView.NOVEL, exitFocus=True)
                 self.novelView.setTreeFocus()
             else:
-                self._changeView(nwView.PROJECT)
+                self._changeView(nwView.PROJECT, exitFocus=True)
                 self.projView.setTreeFocus()
 
         elif paneNo == nwFocus.DOCUMENT:
-            self._changeView(nwView.EDITOR)
+            self._changeView(nwView.EDITOR, exitFocus=True)
             hasViewer = self.splitView.isVisible()
             if hasViewer and self.docEditor.anyFocus():
                 self.docViewer.setFocus()
@@ -1036,7 +1079,7 @@ class GuiMain(QMainWindow):
                 self.docEditor.setFocus()
 
         elif paneNo == nwFocus.OUTLINE:
-            self._changeView(nwView.OUTLINE)
+            self._changeView(nwView.OUTLINE, exitFocus=True)
             self.outlineView.setTreeFocus()
 
         return
@@ -1054,23 +1097,7 @@ class GuiMain(QMainWindow):
             self.novelView.refreshCurrentTree()
 
         if theme:
-            SHARED.theme.loadTheme()
-            self.setPalette(QApplication.palette())
-            self.docEditor.updateTheme()
-            self.docViewer.updateTheme()
-            self.docViewerPanel.updateTheme()
-            self.sideBar.updateTheme()
-            self.projView.updateTheme()
-            self.novelView.updateTheme()
-            self.projSearch.updateTheme()
-            self.outlineView.updateTheme()
-            self.itemDetails.updateTheme()
-            self.mainStatus.updateTheme()
-            SHARED.project.tree.refreshAllItems()
-
-        if syntax:
-            SHARED.theme.loadSyntax()
-            self.docEditor.updateSyntaxColors()
+            self.refreshThemeColors(syntax=syntax, force=True)
 
         self.docEditor.initEditor()
         self.docViewer.initViewer()
@@ -1164,8 +1191,11 @@ class GuiMain(QMainWindow):
         return
 
     @pyqtSlot(nwView)
-    def _changeView(self, view: nwView) -> None:
+    def _changeView(self, view: nwView, exitFocus: bool = False) -> None:
         """Handle the requested change of view from the GuiViewBar."""
+        if exitFocus:
+            SHARED.setFocusMode(False)
+
         if view == nwView.EDITOR:
             # Only change the main stack, but not the project stack
             self.mainStack.setCurrentWidget(self.splitMain)
@@ -1325,6 +1355,15 @@ class GuiMain(QMainWindow):
     ##
     #  Internal Functions
     ##
+
+    def _setWindowSize(self, size: list[int]) -> None:
+        """Set the main window size."""
+        if len(size) == 2 and (screen := SHARED.mainScreen):
+            availSize = screen.availableSize()
+            width = minmax(size[0], 900, availSize.width())
+            height = minmax(size[1], 500, availSize.height())
+            self.resize(width, height)
+        return
 
     def _updateWindowTitle(self, projName: str | None = None) -> None:
         """Set the window title and add the project's name."""
