@@ -31,7 +31,7 @@ from pathlib import Path
 from time import time
 
 from PyQt6.QtCore import QEvent, Qt, QTimer, pyqtSlot
-from PyQt6.QtGui import QCloseEvent, QCursor, QIcon, QShortcut
+from PyQt6.QtGui import QCloseEvent, QCursor, QIcon, QShortcut, QColor
 from PyQt6.QtWidgets import (
     QApplication, QFileDialog, QHBoxLayout, QMainWindow, QMessageBox,
     QSplitter, QStackedWidget, QVBoxLayout, QWidget
@@ -45,7 +45,7 @@ from novelwriter.dialogs.preferences import GuiPreferences
 from novelwriter.dialogs.projectsettings import GuiProjectSettings
 from novelwriter.dialogs.wordlist import GuiWordList
 from novelwriter.enum import nwDocAction, nwDocInsert, nwDocMode, nwFocus, nwItemType, nwView
-from novelwriter.extensions.progressbars import NProgressSimple
+from novelwriter.extensions.progressbars import NProgressSimple, NProgressCircle
 from novelwriter.gui.doceditor import GuiDocEditor
 from novelwriter.gui.docviewer import GuiDocViewer
 from novelwriter.gui.docviewerpanel import GuiDocViewerPanel
@@ -63,6 +63,7 @@ from novelwriter.tools.noveldetails import GuiNovelDetails
 from novelwriter.tools.welcome import GuiWelcome
 from novelwriter.tools.writingstats import GuiWritingStats
 from novelwriter.types import QtModShift
+from novelwriter.cvs import Repository
 
 logger = logging.getLogger(__name__)
 
@@ -436,6 +437,12 @@ class GuiMain(QMainWindow):
         # Switch main tab to editor view
         self._changeView(nwView.PROJECT)
 
+        # Progress bar
+        progress = self._showBar(4, "Opening")
+        self._setStep(progress, 1, "Pulling from repo")
+        Repository().pull(projFile)
+        
+        self._setStep(progress, 2, "Opening")
         # Try to open the project
         tStart = time()
         if not SHARED.openProject(projFile):
@@ -475,6 +482,8 @@ class GuiMain(QMainWindow):
             else:
                 return False
 
+        self._setStep(progress, 3, "Opening")
+
         # Update GUI
         self._updateWindowTitle(SHARED.project.data.name)
         self.docEditor.toggleSpellCheck(SHARED.project.data.spellCheck)
@@ -513,7 +522,8 @@ class GuiMain(QMainWindow):
         SHARED.project.setProjectChanged(False)
 
         logger.debug("Project loaded in %.3f ms", (time() - tStart)*1000)
-
+        
+        self._stopProgress(progress)
         return True
 
     def saveProject(self, autoSave: bool = False) -> bool:
@@ -881,7 +891,17 @@ class GuiMain(QMainWindow):
             CONFIG.setMainWinSize(self.width(), self.height())
 
         if SHARED.hasProject:
+            progress = self._showBar(3, "Preparing")
+            ppath = SHARED.project.storage.storagePath
+
+            self._setStep(progress, 1, "Closing project")
             self.closeProject(True)
+
+            self._setStep(progress, 2, "Pushing to repo")
+            Repository().push(ppath)
+            
+            self._stopProgress(progress)
+
         CONFIG.saveConfig()
 
         QApplication.quit()
@@ -1369,3 +1389,28 @@ class GuiMain(QMainWindow):
         """Set the window title and add the project's name."""
         self.setWindowTitle(" - ".join(filter(None, [projName, CONFIG.appName])))
         return
+
+    # Progressbar methods
+    def _showBar(self, steps: int, initial_message: str) -> NProgressCircle:
+        p = NProgressCircle(self, 160, 16)
+        p.setMaximum(steps)
+        p.setValue(0)
+        p.setColors(
+            back=QColor(255, 255, 255, 224),
+            track=QColor(196, 196, 196, 128),
+            text=QColor(0, 0, 0)
+        )
+
+        p.setCentreText(initial_message)
+        p.setVisible(True)
+        return p
+        
+    def _setStep(self, progress_bar: NProgressCircle, new_step: int, caption: str) -> None:
+        progress_bar.setValue(new_step)
+        progress_bar.setCentreText(self.tr(caption))
+        QApplication.processEvents()
+
+    def _stopProgress(self, progress_bar: NProgressCircle) -> None:
+        progress_bar.setValue(progress_bar.maximum())
+        progress_bar.setCentreText(self.tr("Done"))
+        progress_bar.setVisible(False)
